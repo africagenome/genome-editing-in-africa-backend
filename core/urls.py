@@ -19,6 +19,21 @@ router.register(r'events', views.EventViewSet, basename='events')
 router.register(r'organism-categories', views.OrganismCategoryViewSet, basename='organism-categories')
 router.register(r'organisms', views.OrganismViewSet, basename='organisms')
 
+router.register(r'frameworks', views.RegulatoryFrameworkViewSet, basename='regulatory-frameworks')
+router.register(r'agreements', views.MultilateralAgreementViewSet, basename='multilateral-agreements')
+router.register(r'institutions', views.RegulatoryInstitutionViewSet, basename='regulatory-institutions')
+router.register(r'instruments', views.RegulatoryInstrumentViewSet, basename='regulatory-instruments')
+router.register(r'ged-status', views.GedRegulatoryStatusViewSet, basename='ged-regulatory-status')
+router.register(r'timeline', views.RegulatoryTimelineViewSet, basename='regulatory-timeline')
+
+
+router.register(r'categories', views.InfrastructureCategoryViewSet, basename='infrastructure-categories')
+router.register(r'facilities', views.LaboratoryFacilityViewSet, basename='laboratory-facilities')
+router.register(r'equipment', views.EquipmentViewSet, basename='equipment')
+router.register(r'projects', views.InfrastructureProjectViewSet, basename='infrastructure-projects')
+router.register(r'training', views.TrainingCapacityViewSet, basename='training-capacity')
+router.register(r'assessments', views.InfrastructureAssessmentViewSet, basename='infrastructure-assessments')
+
 urlpatterns = [
     path('', include(router.urls)),
 ]

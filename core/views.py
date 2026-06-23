@@ -6,28 +6,15 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q, Count, Avg, Sum
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from .models import (
-    Region, Country, Institution, Expert, Project, Publication,
-    Protocol, Consultation, ConsultationSubmission, News, FAQ,
-    GlossaryTerm, FundingOpportunity, Event, OrganismCategory, Organism
-)
-from .serializers import (
-    RegionSerializer, CountryListSerializer, CountryDetailSerializer,
-    InstitutionSerializer, ExpertListSerializer, ExpertDetailSerializer,
-    ProjectListSerializer, ProjectDetailSerializer, ProjectCreateUpdateSerializer,
-    PublicationListSerializer, PublicationDetailSerializer,
-    ProtocolListSerializer, ProtocolDetailSerializer,
-    ConsultationSerializer, ConsultationSubmissionSerializer,
-    NewsListSerializer, NewsDetailSerializer, FAQSerializer,
-    GlossaryTermSerializer, FundingOpportunitySerializer,
-    EventListSerializer, EventDetailSerializer,
-    OrganismCategorySerializer, OrganismListSerializer, OrganismDetailSerializer,
-    DashboardStatsSerializer
-)
+from .models import *
+from .serializers import *
 from .filters import (
     CountryFilter, ProjectFilter, ExpertFilter, PublicationFilter,
     ProtocolFilter, EventFilter, OrganismFilter
 )
+
+
+
 
 
 class RegionViewSet(viewsets.ReadOnlyModelViewSet):
@@ -768,3 +755,419 @@ class DashboardViewSet(viewsets.GenericViewSet):
             'featured_news': News.objects.filter(is_featured=True).count(),
         }
         return Response(stats)
+    
+
+
+# Kevin
+class RegulatoryFrameworkViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for regulatory frameworks for genome editing in Africa.
+    
+    Provides detailed information about each country's regulatory framework,
+    including institutions, instruments, multilateral agreements, and status.
+    """
+    queryset = RegulatoryFramework.objects.all()
+    permission_classes = [AllowAny]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['status', 'approach', 'country__region']
+    search_fields = ['country__name', 'summary', 'country__code']
+    ordering_fields = ['country__name', 'status', 'last_updated']
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return RegulatoryFrameworkListSerializer
+        elif self.action in ['create', 'update', 'partial_update']:
+            return RegulatoryFrameworkCreateUpdateSerializer
+        return RegulatoryFrameworkDetailSerializer
+
+    @action(detail=False, methods=['get'])
+    def by_country(self, request):
+        """Get regulatory framework by country code or name"""
+        country_code = request.query_params.get('code')
+        country_name = request.query_params.get('name')
+        
+        if country_code:
+            framework = RegulatoryFramework.objects.filter(country__code__iexact=country_code).first()
+        elif country_name:
+            framework = RegulatoryFramework.objects.filter(country__name__iexact=country_name).first()
+        else:
+            return Response(
+                {'error': 'Please provide either code or name parameter'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not framework:
+            return Response(
+                {'error': 'Regulatory framework not found for the specified country'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = self.get_serializer(framework)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Get statistics about regulatory frameworks"""
+        total_countries = RegulatoryFramework.objects.count()
+        by_status = dict(
+            RegulatoryFramework.objects.values_list('status')
+            .annotate(count=Count('id'))
+        )
+        by_approach = dict(
+            RegulatoryFramework.objects.values_list('approach')
+            .annotate(count=Count('id'))
+        )
+        
+        stats = {
+            'total_frameworks': total_countries,
+            'by_status': by_status,
+            'by_approach': by_approach,
+            'functional_frameworks': RegulatoryFramework.objects.filter(
+                status__in=['functional', 'implemented']
+            ).count(),
+            'with_guidelines': RegulatoryFramework.objects.filter(
+                ged_guidelines_date__isnull=False
+            ).count(),
+        }
+        return Response(stats)
+
+    @action(detail=True, methods=['get'])
+    def agreements(self, request, pk=None):
+        """Get all multilateral agreements for a country"""
+        framework = self.get_object()
+        agreements = framework.multilateral_agreements.filter(is_active=True)
+        serializer = MultilateralAgreementSerializer(agreements, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def institutions(self, request, pk=None):
+        """Get all regulatory institutions for a country"""
+        framework = self.get_object()
+        institutions = framework.regulatory_institutions.filter(is_active=True)
+        serializer = RegulatoryInstitutionSerializer(institutions, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def instruments(self, request, pk=None):
+        """Get all regulatory instruments for a country"""
+        framework = self.get_object()
+        instruments = framework.regulatory_instruments.filter(is_current=True)
+        serializer = RegulatoryInstrumentSerializer(instruments, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def timeline(self, request, pk=None):
+        """Get regulatory timeline for a country"""
+        framework = self.get_object()
+        timeline = framework.regulatory_timeline.all()
+        serializer = RegulatoryTimelineSerializer(timeline, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def ged_status(self, request, pk=None):
+        """Get genome editing regulatory status for a country"""
+        framework = self.get_object()
+        statuses = framework.ged_regulatory_statuses.all()
+        serializer = GedRegulatoryStatusSerializer(statuses, many=True)
+        return Response(serializer.data)
+
+
+class MultilateralAgreementViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for multilateral agreements
+    """
+    queryset = MultilateralAgreement.objects.all()
+    serializer_class = MultilateralAgreementSerializer
+    permission_classes = [AllowAny]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['agreement_type', 'framework__country']
+    search_fields = ['name', 'framework__country__name']
+
+
+class RegulatoryInstitutionViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for regulatory institutions
+    """
+    queryset = RegulatoryInstitution.objects.filter(is_active=True)
+    serializer_class = RegulatoryInstitutionSerializer
+    permission_classes = [AllowAny]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['role', 'framework__country', 'institution']
+    search_fields = ['institution__name', 'mandate']
+
+
+class RegulatoryInstrumentViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for regulatory instruments
+    """
+    queryset = RegulatoryInstrument.objects.filter(is_current=True)
+    serializer_class = RegulatoryInstrumentSerializer
+    permission_classes = [AllowAny]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['instrument_type', 'coverage', 'framework__country']
+    search_fields = ['title', 'summary']
+
+
+class GedRegulatoryStatusViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for genome editing regulatory statuses
+    """
+    queryset = GedRegulatoryStatus.objects.all()
+    serializer_class = GedRegulatoryStatusSerializer
+    permission_classes = [AllowAny]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['category', 'status', 'framework__country']
+    search_fields = ['description']
+
+
+class RegulatoryTimelineViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for regulatory timelines
+    """
+    queryset = RegulatoryTimeline.objects.all()
+    serializer_class = RegulatoryTimelineSerializer
+    permission_classes = [AllowAny]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['event_type', 'framework__country']
+    ordering_fields = ['event_date']
+
+
+#Kiambe
+class InfrastructureCategoryViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for infrastructure categories
+    """
+    queryset = InfrastructureCategory.objects.filter(is_active=True)
+    serializer_class = InfrastructureCategorySerializer
+    permission_classes = [AllowAny]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'description']
+    ordering_fields = ['order', 'name']
+
+
+class LaboratoryFacilityViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for laboratory facilities
+    """
+    queryset = LaboratoryFacility.objects.filter(is_active=True)
+    permission_classes = [AllowAny]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['status', 'biosafety_level', 'category', 'institution', 'institution__country']
+    search_fields = ['name', 'institution__name', 'facility_type', 'description']
+    ordering_fields = ['institution__name', 'name', 'status']
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return LaboratoryFacilityListSerializer
+        elif self.action in ['create', 'update', 'partial_update']:
+            return LaboratoryFacilityCreateUpdateSerializer
+        return LaboratoryFacilityDetailSerializer
+
+    @action(detail=False, methods=['get'])
+    def by_country(self, request):
+        """Get laboratory facilities by country"""
+        country_code = request.query_params.get('code')
+        country_name = request.query_params.get('name')
+        
+        if country_code:
+            facilities = self.get_queryset().filter(institution__country__code__iexact=country_code)
+        elif country_name:
+            facilities = self.get_queryset().filter(institution__country__name__iexact=country_name)
+        else:
+            return Response(
+                {'error': 'Please provide either code or name parameter'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        serializer = LaboratoryFacilityListSerializer(facilities, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Get statistics about laboratory facilities"""
+        total = LaboratoryFacility.objects.filter(is_active=True).count()
+        by_status = dict(
+            LaboratoryFacility.objects.filter(is_active=True)
+            .values_list('status')
+            .annotate(count=Count('id'))
+        )
+        by_biosafety = dict(
+            LaboratoryFacility.objects.filter(is_active=True)
+            .values_list('biosafety_level')
+            .annotate(count=Count('id'))
+        )
+        by_category = dict(
+            LaboratoryFacility.objects.filter(is_active=True)
+            .values_list('category__name')
+            .annotate(count=Count('id'))
+        )
+        
+        stats = {
+            'total_facilities': total,
+            'by_status': by_status,
+            'by_biosafety_level': by_biosafety,
+            'by_category': by_category,
+            'fully_equipped': LaboratoryFacility.objects.filter(
+                is_active=True, status='fully_equipped'
+            ).count(),
+            'partially_equipped': LaboratoryFacility.objects.filter(
+                is_active=True, status='partially_equipped'
+            ).count(),
+        }
+        return Response(stats)
+
+    @action(detail=True, methods=['get'])
+    def equipment(self, request, pk=None):
+        """Get equipment for a specific facility"""
+        facility = self.get_object()
+        equipment = facility.equipment.filter(is_active=True)
+        serializer = EquipmentSerializer(equipment, many=True)
+        return Response(serializer.data)
+
+
+class EquipmentViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for equipment
+    """
+    queryset = Equipment.objects.filter(is_active=True)
+    serializer_class = EquipmentSerializer
+    permission_classes = [AllowAny]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['equipment_type', 'status', 'condition', 'facility', 'facility__institution__country']
+    search_fields = ['name', 'model', 'manufacturer', 'serial_number']
+    ordering_fields = ['name', 'acquisition_date']
+
+    @action(detail=False, methods=['get'])
+    def by_country(self, request):
+        """Get equipment by country"""
+        country_code = request.query_params.get('code')
+        country_name = request.query_params.get('name')
+        
+        if country_code:
+            equipment = self.get_queryset().filter(
+                facility__institution__country__code__iexact=country_code
+            )
+        elif country_name:
+            equipment = self.get_queryset().filter(
+                facility__institution__country__name__iexact=country_name
+            )
+        else:
+            return Response(
+                {'error': 'Please provide either code or name parameter'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        serializer = self.get_serializer(equipment, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Get statistics about equipment"""
+        total = Equipment.objects.filter(is_active=True).count()
+        by_type = dict(
+            Equipment.objects.filter(is_active=True)
+            .values_list('equipment_type')
+            .annotate(count=Count('id'))
+        )
+        by_status = dict(
+            Equipment.objects.filter(is_active=True)
+            .values_list('status')
+            .annotate(count=Count('id'))
+        )
+        
+        stats = {
+            'total_equipment': total,
+            'by_type': by_type,
+            'by_status': by_status,
+            'operational': Equipment.objects.filter(
+                is_active=True, status='operational'
+            ).count(),
+            'needs_repair': Equipment.objects.filter(
+                is_active=True, status__in=['needs_repair', 'under_maintenance']
+            ).count(),
+        }
+        return Response(stats)
+
+
+class InfrastructureProjectViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for infrastructure projects
+    """
+    queryset = InfrastructureProject.objects.filter(is_active=True)
+    serializer_class = InfrastructureProjectSerializer
+    permission_classes = [AllowAny]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['status', 'priority', 'country', 'institution']
+    search_fields = ['title', 'description', 'objectives']
+    ordering_fields = ['start_date', 'end_date', 'priority']
+
+    @action(detail=False, methods=['get'])
+    def by_country(self, request):
+        """Get infrastructure projects by country"""
+        country_code = request.query_params.get('code')
+        country_name = request.query_params.get('name')
+        
+        if country_code:
+            projects = self.get_queryset().filter(country__code__iexact=country_code)
+        elif country_name:
+            projects = self.get_queryset().filter(country__name__iexact=country_name)
+        else:
+            return Response(
+                {'error': 'Please provide either code or name parameter'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        serializer = self.get_serializer(projects, many=True)
+        return Response(serializer.data)
+
+
+class TrainingCapacityViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for training capacities
+    """
+    queryset = TrainingCapacity.objects.filter(is_active=True)
+    serializer_class = TrainingCapacitySerializer
+    permission_classes = [AllowAny]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['training_type', 'skill_level', 'institution', 'institution__country']
+    search_fields = ['title', 'description', 'institution__name']
+    ordering_fields = ['start_date', 'title']
+
+    @action(detail=False, methods=['get'])
+    def featured(self, request):
+        """Get featured training capacities"""
+        featured = self.get_queryset().filter(is_featured=True)[:6]
+        serializer = self.get_serializer(featured, many=True)
+        return Response(serializer.data)
+
+
+class InfrastructureAssessmentViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for infrastructure assessments
+    """
+    queryset = InfrastructureAssessment.objects.all()
+    serializer_class = InfrastructureAssessmentSerializer
+    permission_classes = [AllowAny]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['assessment_area', 'priority', 'country']
+    search_fields = ['title', 'description']
+    ordering_fields = ['-assessment_date']
+
+    @action(detail=False, methods=['get'])
+    def by_country(self, request):
+        """Get infrastructure assessments by country"""
+        country_code = request.query_params.get('code')
+        country_name = request.query_params.get('name')
+        
+        if country_code:
+            assessments = self.get_queryset().filter(country__code__iexact=country_code)
+        elif country_name:
+            assessments = self.get_queryset().filter(country__name__iexact=country_name)
+        else:
+            return Response(
+                {'error': 'Please provide either code or name parameter'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        serializer = self.get_serializer(assessments, many=True)
+        return Response(serializer.data)

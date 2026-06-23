@@ -3,7 +3,7 @@
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.utils.text import slugify
-from .models import Project, Consultation, News, Event, Country
+from .models import *
 
 
 @receiver(pre_save, sender=Project)
@@ -49,3 +49,33 @@ def update_country_metrics(sender, instance, **kwargs):
         instance.institutions_count = inst_count
         instance.save(update_fields=['active_projects', 'confined_field_trials', 
                                       'publications_count', 'institutions_count'])
+        
+@receiver(post_save, sender=Country)
+def create_regulatory_framework(sender, instance, created, **kwargs):
+    """Automatically create a regulatory framework when a new country is added"""
+    if created:
+        RegulatoryFramework.objects.get_or_create(
+            country=instance,
+            defaults={
+                'status': 'development',
+                'approach': 'not_specified',
+                'summary': f'Regulatory framework for {instance.name} is under development.',
+            }
+        )
+
+@receiver(post_save, sender=Country)
+def create_infrastructure_assessment(sender, instance, created, **kwargs):
+    """Create an infrastructure assessment when a new country is added"""
+    if created:
+        InfrastructureAssessment.objects.get_or_create(
+            country=instance,
+            title=f"{instance.name} Infrastructure Baseline Assessment",
+            defaults={
+                'assessment_date': timezone.now().date(),
+                'assessment_area': 'other',
+                'description': f'Baseline infrastructure assessment for {instance.name}.',
+                'current_status': 'Assessment pending.',
+                'priority': 'medium',
+                'score': 0,
+            }
+        )

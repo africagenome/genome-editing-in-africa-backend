@@ -1,9 +1,6 @@
+#core/serializers.py
 from rest_framework import serializers
-from .models import (
-    Region, Country, Institution, Expert, Project, Publication,
-    Protocol, Consultation, ConsultationSubmission, News, FAQ,
-    GlossaryTerm, FundingOpportunity, Event, OrganismCategory, Organism
-)
+from .models import *
 
 
 class RegionSerializer(serializers.ModelSerializer):
@@ -30,15 +27,37 @@ class CountryDetailSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+from rest_framework import serializers
+
 class InstitutionSerializer(serializers.ModelSerializer):
-    country_name = serializers.CharField(source='country.name', read_only=True)
-    country_code = serializers.CharField(source='country.code', read_only=True)
+    # Returns a list of country IDs for writes/reads
+    countries = serializers.PrimaryKeyRelatedField(
+        many=True, 
+        queryset=Country.objects.all(),
+        required=False
+    )
+    
+    # Returns detailed array of country objects (read-only)
+    countries_details = serializers.SerializerMethodField()
     
     class Meta:
         model = Institution
-        fields = ['id', 'name', 'acronym', 'type', 'country', 'country_name',
-                  'country_code', 'website', 'email', 'phone', 'address',
-                  'description', 'logo', 'established_year', 'is_active']
+        fields = [
+            'id', 'name', 'acronym', 'type', 'countries', 'countries_details', 
+            'website', 'email', 'phone', 'address', 'description', 
+            'logo', 'established_year', 'is_active'
+        ]
+
+    def get_countries_details(self, obj):
+        """Returns a list of dicts with name and code for all associated countries."""
+        return [
+            {
+                'id': country.id,
+                'name': country.name,
+                'code': getattr(country, 'code', None) # Safely get code if it exists
+            } 
+            for country in obj.countries.all()
+        ]
 
 
 class ExpertListSerializer(serializers.ModelSerializer):
@@ -412,3 +431,251 @@ class DashboardStatsSerializer(serializers.Serializer):
     publications_by_year = serializers.DictField()
     countries_by_readiness = serializers.DictField()
     organisms_by_category = serializers.DictField()
+
+
+
+class MultilateralAgreementSerializer(serializers.ModelSerializer):
+    agreement_type_display = serializers.CharField(source='get_agreement_type_display', read_only=True)
+    
+    class Meta:
+        model = MultilateralAgreement
+        fields = [
+            'id', 'agreement_type', 'agreement_type_display', 'name',
+            'signed_date', 'ratified_date', 'accession_date',
+            'reference_url', 'notes', 'is_active'
+        ]
+
+
+class RegulatoryInstitutionSerializer(serializers.ModelSerializer):
+    role_display = serializers.CharField(source='get_role_display', read_only=True)
+    institution_name = serializers.CharField(source='institution.name', read_only=True)
+    institution_detail = InstitutionSerializer(source='institution', read_only=True)
+    
+    class Meta:
+        model = RegulatoryInstitution
+        fields = [
+            'id', 'institution', 'institution_name', 'institution_detail',
+            'role', 'role_display', 'mandate', 'website',
+            'contact_email', 'contact_phone', 'order', 'is_active'
+        ]
+
+
+class RegulatoryInstrumentSerializer(serializers.ModelSerializer):
+    instrument_type_display = serializers.CharField(source='get_instrument_type_display', read_only=True)
+    coverage_display = serializers.CharField(source='get_coverage_display', read_only=True)
+    
+    class Meta:
+        model = RegulatoryInstrument
+        fields = [
+            'id', 'title', 'instrument_type', 'instrument_type_display',
+            'date_enacted', 'date_amended', 'coverage', 'coverage_display',
+            'summary', 'reference_url', 'document_file', 'is_current', 'order'
+        ]
+
+
+class GedRegulatoryStatusSerializer(serializers.ModelSerializer):
+    category_display = serializers.CharField(source='get_category_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    
+    class Meta:
+        model = GedRegulatoryStatus
+        fields = [
+            'id', 'category', 'category_display', 'status', 'status_display',
+            'description', 'notes', 'last_updated'
+        ]
+
+
+class RegulatoryTimelineSerializer(serializers.ModelSerializer):
+    event_type_display = serializers.CharField(source='get_event_type_display', read_only=True)
+    
+    class Meta:
+        model = RegulatoryTimeline
+        fields = [
+            'id', 'event_type', 'event_type_display', 'title',
+            'description', 'event_date', 'reference', 'order'
+        ]
+
+
+class RegulatoryFrameworkListSerializer(serializers.ModelSerializer):
+    country_name = serializers.CharField(source='country.name', read_only=True)
+    country_code = serializers.CharField(source='country.code', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    approach_display = serializers.CharField(source='get_approach_display', read_only=True)
+    
+    class Meta:
+        model = RegulatoryFramework
+        fields = [
+            'id', 'country', 'country_name', 'country_code',
+            'status', 'status_display', 'approach', 'approach_display',
+            'summary', 'biosafety_act_date', 'ged_guidelines_date',
+            'last_updated'
+        ]
+
+
+class RegulatoryFrameworkDetailSerializer(serializers.ModelSerializer):
+    country_detail = CountryListSerializer(source='country', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    approach_display = serializers.CharField(source='get_approach_display', read_only=True)
+    
+    # Nested serializers
+    multilateral_agreements = MultilateralAgreementSerializer(many=True, read_only=True)
+    regulatory_institutions = RegulatoryInstitutionSerializer(many=True, read_only=True)
+    regulatory_instruments = RegulatoryInstrumentSerializer(many=True, read_only=True)
+    ged_regulatory_statuses = GedRegulatoryStatusSerializer(many=True, read_only=True)
+    regulatory_timeline = RegulatoryTimelineSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = RegulatoryFramework
+        fields = [
+            'id', 'country', 'country_detail', 'status', 'status_display',
+            'approach', 'approach_display', 'summary', 'last_updated',
+            'biosafety_act_date', 'biosafety_regulations_date', 'ged_guidelines_date',
+            'created_at', 'updated_at',
+            'multilateral_agreements', 'regulatory_institutions',
+            'regulatory_instruments', 'ged_regulatory_statuses',
+            'regulatory_timeline'
+        ]
+
+
+class RegulatoryFrameworkCreateUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RegulatoryFramework
+        fields = [
+            'country', 'status', 'approach', 'summary',
+            'biosafety_act_date', 'biosafety_regulations_date', 'ged_guidelines_date'
+        ]
+
+
+
+#Kiambe
+class InfrastructureCategorySerializer(serializers.ModelSerializer):
+    category_type_display = serializers.CharField(source='get_category_type_display', read_only=True)
+    facility_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = InfrastructureCategory
+        fields = [
+            'id', 'name', 'category_type', 'category_type_display',
+            'description', 'icon', 'order', 'is_active', 'facility_count'
+        ]
+    
+    def get_facility_count(self, obj):
+        return obj.laboratory_facilities.filter(is_active=True).count()
+
+
+class EquipmentSerializer(serializers.ModelSerializer):
+    equipment_type_display = serializers.CharField(source='get_equipment_type_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    condition_display = serializers.CharField(source='get_condition_display', read_only=True)
+    
+    class Meta:
+        model = Equipment
+        fields = [
+            'id', 'name', 'equipment_type', 'equipment_type_display', 'model',
+            'manufacturer', 'serial_number', 'facility', 'status', 'status_display',
+            'condition', 'condition_display', 'specifications', 'acquisition_date',
+            'last_maintenance_date', 'next_maintenance_date', 'is_shared',
+            'operational_hours', 'contact_person', 'is_active'
+        ]
+
+
+class LaboratoryFacilityListSerializer(serializers.ModelSerializer):
+    institution_name = serializers.CharField(source='institution.name', read_only=True)
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    biosafety_level_display = serializers.CharField(source='get_biosafety_level_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    equipment_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = LaboratoryFacility
+        fields = [
+            'id', 'institution', 'institution_name', 'category', 'category_name',
+            'name', 'facility_type', 'biosafety_level', 'biosafety_level_display',
+            'status', 'status_display', 'description', 'equipment_count',
+            'researcher_count', 'is_active'
+        ]
+    
+    def get_equipment_count(self, obj):
+        return obj.equipment.filter(is_active=True).count()
+
+
+class LaboratoryFacilityDetailSerializer(serializers.ModelSerializer):
+    institution_detail = InstitutionSerializer(source='institution', read_only=True)
+    category_detail = InfrastructureCategorySerializer(source='category', read_only=True)
+    biosafety_level_display = serializers.CharField(source='get_biosafety_level_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    equipment = EquipmentSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = LaboratoryFacility
+        fields = [
+            'id', 'institution', 'institution_detail', 'category', 'category_detail',
+            'name', 'facility_type', 'biosafety_level', 'biosafety_level_display',
+            'status', 'status_display', 'description', 'limitations', 'support_needed',
+            'equipment_list', 'equipment_needs', 'capacity_description',
+            'researcher_count', 'contact_person', 'contact_email', 'contact_phone',
+            'established_year', 'last_updated', 'is_active', 'equipment',
+            'created_at', 'updated_at'
+        ]
+
+
+class LaboratoryFacilityCreateUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LaboratoryFacility
+        fields = [
+            'institution', 'category', 'name', 'facility_type', 'biosafety_level',
+            'status', 'description', 'limitations', 'support_needed',
+            'equipment_list', 'equipment_needs', 'capacity_description',
+            'researcher_count', 'contact_person', 'contact_email', 'contact_phone',
+            'established_year', 'is_active'
+        ]
+
+
+class InfrastructureProjectSerializer(serializers.ModelSerializer):
+    country_name = serializers.CharField(source='country.name', read_only=True)
+    institution_name = serializers.CharField(source='institution.name', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    priority_display = serializers.CharField(source='get_priority_display', read_only=True)
+    
+    class Meta:
+        model = InfrastructureProject
+        fields = [
+            'id', 'title', 'slug', 'country', 'country_name', 'institution',
+            'institution_name', 'description', 'objectives', 'expected_outcomes',
+            'status', 'status_display', 'priority', 'priority_display',
+            'start_date', 'end_date', 'funding_amount', 'funding_source',
+            'partners', 'equipment_needed', 'contact_person', 'contact_email',
+            'is_active', 'created_at', 'updated_at'
+        ]
+
+
+class TrainingCapacitySerializer(serializers.ModelSerializer):
+    institution_name = serializers.CharField(source='institution.name', read_only=True)
+    training_type_display = serializers.CharField(source='get_training_type_display', read_only=True)
+    skill_level_display = serializers.CharField(source='get_skill_level_display', read_only=True)
+    
+    class Meta:
+        model = TrainingCapacity
+        fields = [
+            'id', 'institution', 'institution_name', 'title', 'training_type',
+            'training_type_display', 'description', 'skill_level',
+            'skill_level_display', 'max_participants', 'current_enrollment',
+            'topics_covered', 'equipment_used', 'start_date', 'end_date',
+            'duration', 'contact_person', 'contact_email', 'is_active',
+            'is_featured', 'created_at', 'updated_at'
+        ]
+
+
+class InfrastructureAssessmentSerializer(serializers.ModelSerializer):
+    country_name = serializers.CharField(source='country.name', read_only=True)
+    assessment_area_display = serializers.CharField(source='get_assessment_area_display', read_only=True)
+    priority_display = serializers.CharField(source='get_priority_display', read_only=True)
+    
+    class Meta:
+        model = InfrastructureAssessment
+        fields = [
+            'id', 'country', 'country_name', 'assessment_date',
+            'assessment_area', 'assessment_area_display', 'title',
+            'description', 'current_status', 'challenges', 'recommendations',
+            'priority', 'priority_display', 'score', 'created_at', 'updated_at'
+        ]
