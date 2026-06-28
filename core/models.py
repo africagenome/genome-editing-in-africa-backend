@@ -2,6 +2,8 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils.text import slugify
+from multiselectfield import MultiSelectField
+
 
 class OrganismCategory(models.Model):
     """
@@ -16,7 +18,7 @@ class OrganismCategory(models.Model):
         ('insect', 'Insect'),
         ('fish', 'Fish'),
         ('bird', 'Bird'),
-        ('mammal', 'Mammal'),
+        ('forestry', 'Forestry'),
         ('other', 'Other'),
     ]
     
@@ -103,7 +105,7 @@ class Organism(models.Model):
     
     # Description
     description = models.TextField(blank=True)
-    native_region = models.CharField(max_length=200, blank=True)
+    native_region = models.TextField(blank=True)
     economic_importance = models.TextField(blank=True)
     
     # Images
@@ -123,16 +125,17 @@ class Organism(models.Model):
     class Meta:
         ordering = ['common_name']
         unique_together = ['common_name', 'scientific_name']
-    
+        verbose_name = "Crops/Livestock/Organism"
+
     def __str__(self):
-        if self.custom_name:
-            return self.custom_name
+        if self.common_name:
+            return self.common_name
         return f"{self.get_common_name_display()} ({self.get_scientific_name_display()})"
     
     @property
     def display_name(self):
-        if self.custom_name:
-            return self.custom_name
+        if self.common_name:
+            return self.common_name
         return self.get_common_name_display()
 
 
@@ -178,9 +181,9 @@ class Country(models.Model):
     
     # Regulatory Status
     biosafety_status = models.CharField(max_length=20, choices=BIOSAFETY_STATUS, default='development')
-    ged_guidelines = models.CharField(max_length=100, blank=True, help_text="Genome Editing Guidelines status")
+    ged_guidelines = models.TextField(blank=True, help_text="Genome Editing Guidelines status")
     classification_approach = models.CharField(max_length=20, choices=CLASSIFICATION_CHOICES, default='none')
-    international_alignment = models.CharField(max_length=100, blank=True, help_text="Cartagena, AU Model Law, etc.")
+    international_alignment = models.TextField(blank=True, help_text="Cartagena, AU Model Law, etc.")
     readiness_score = models.FloatField(default=0.0, validators=[MinValueValidator(0), MaxValueValidator(1)])
     
     # Metrics
@@ -217,11 +220,13 @@ class Institution(models.Model):
         ('academic', 'Academic Institution'),
         ('private', 'Private Sector'),
         ('cso', 'Civil Society Organization'),
-        ('international', 'International Partner'),
+        ('regional', 'Regional/Continental Body'),
+        ('international', 'International Partner/Body'),
         ('government', 'Government Ministry'),
+        ('dp', 'Development Partner/Funding Agency'),
     ]
     
-    name = models.CharField(max_length=300)
+    name = models.CharField(max_length=250, unique=True)
     acronym = models.CharField(max_length=50, blank=True)
     type = models.CharField(max_length=20, choices=TYPE_CHOICES)
     countries = models.ManyToManyField(Country, related_name='institutions', blank=True)    
@@ -304,9 +309,9 @@ class Project(models.Model):
         ('planning', 'Planning'),
         ('rd', 'Research & Development'),
         ('cft', 'Confined Field Trial'),
-        ('commercial', 'Commercial Release'),
-        ('completed', 'Completed'),
-        ('suspended', 'Suspended'),
+        ('deployment', 'Deployment'),
+        ('commercial', 'Commercialization'),
+        ('completed', 'Completed')
     ]
     
     TECH_CHOICES = [
@@ -318,6 +323,9 @@ class Project(models.Model):
         ('sdn3', 'SDN-3'),
         ('base_editing', 'Base Editing'),
         ('prime_editing', 'Prime Editing'),
+        ('bega', 'Base Editing & Gene Activation'),
+        ('gene_drive', 'Gene Drive'),
+        ('suicide_plasmid', 'Suicide plasmid'),
     ]
     
     SECTOR_CHOICES = [
@@ -349,7 +357,7 @@ class Project(models.Model):
     
     # Technical Details
     technology = models.CharField(max_length=20, choices=TECH_CHOICES)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='rd')
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='rd')
     description = models.TextField()
     objectives = models.TextField(blank=True)
     key_achievements = models.TextField(blank=True)
@@ -364,7 +372,7 @@ class Project(models.Model):
     
     # Funding
     funding_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    funding_source = models.CharField(max_length=300, blank=True)
+    funding_source = models.TextField(blank=True)
     principal_investigator = models.CharField(max_length=200, blank=True)
     
     # Additional
@@ -1087,8 +1095,11 @@ class LaboratoryFacility(models.Model):
         related_name='laboratory_facilities'
     )
     name = models.CharField(max_length=300)
-    facility_type = models.CharField(max_length=200, help_text="e.g., Molecular lab with PCR machines, glasshouses")
-    biosafety_level = models.CharField(max_length=10, choices=BIOSAFETY_LEVELS, default='none')
+    facility_type = models.CharField(max_length=200, help_text="e.g., Molecular lab with PCR machines, glasshouses", blank=True)
+    abbreviation = models.CharField(max_length=200, help_text="e.g., NARL", blank=True)
+    country = models.ForeignKey(Country, on_delete=models.CASCADE, related_name='facilitycountries', blank=True, null=True)
+    #biosafety_level = models.CharField(max_length=10, choices=BIOSAFETY_LEVELS, default='none')
+    biosafety_level = MultiSelectField(choices=BIOSAFETY_LEVELS,default=['none'], blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='partially_equipped')
     
     # Description
@@ -1125,6 +1136,12 @@ class LaboratoryFacility(models.Model):
 
     def __str__(self):
         return f"{self.institution.name} - {self.name}"
+    @property
+    def country_name(self):
+        """Get country name"""
+        return self.country.name if self.country else 'Not specified'
+
+
 
 
 class Equipment(models.Model):

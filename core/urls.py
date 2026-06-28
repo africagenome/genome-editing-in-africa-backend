@@ -1,8 +1,12 @@
+# core/urls.py
+
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
 
 router = DefaultRouter()
+
+# ============= CORE ENDPOINTS =============
 router.register(r'regions', views.RegionViewSet, basename='regions')
 router.register(r'countries', views.CountryViewSet, basename='countries')
 router.register(r'institutions', views.InstitutionViewSet, basename='institutions')
@@ -16,23 +20,29 @@ router.register(r'faqs', views.FAQViewSet, basename='faqs')
 router.register(r'glossary', views.GlossaryTermViewSet, basename='glossary')
 router.register(r'funding', views.FundingOpportunityViewSet, basename='funding')
 router.register(r'events', views.EventViewSet, basename='events')
+
+# ============= DASHBOARD =============
+router.register(r'dashboard', views.DashboardViewSet, basename='dashboard')
+
+# ============= ORGANISM ENDPOINTS =============
 router.register(r'organism-categories', views.OrganismCategoryViewSet, basename='organism-categories')
 router.register(r'organisms', views.OrganismViewSet, basename='organisms')
 
-router.register(r'frameworks', views.RegulatoryFrameworkViewSet, basename='regulatory-frameworks')
-router.register(r'agreements', views.MultilateralAgreementViewSet, basename='multilateral-agreements')
-router.register(r'institutions', views.RegulatoryInstitutionViewSet, basename='regulatory-institutions')
-router.register(r'instruments', views.RegulatoryInstrumentViewSet, basename='regulatory-instruments')
-router.register(r'ged-status', views.GedRegulatoryStatusViewSet, basename='ged-regulatory-status')
-router.register(r'timeline', views.RegulatoryTimelineViewSet, basename='regulatory-timeline')
+# ============= REGULATORY FRAMEWORK ENDPOINTS =============
+router.register(r'regulatory-frameworks', views.RegulatoryFrameworkViewSet, basename='regulatory-frameworks')
+router.register(r'regulatory-agreements', views.MultilateralAgreementViewSet, basename='regulatory-agreements')
+router.register(r'regulatory-institutions', views.RegulatoryInstitutionViewSet, basename='regulatory-institutions')
+router.register(r'regulatory-instruments', views.RegulatoryInstrumentViewSet, basename='regulatory-instruments')
+router.register(r'regulatory-ged-status', views.GedRegulatoryStatusViewSet, basename='regulatory-ged-status')
+router.register(r'regulatory-timelines', views.RegulatoryTimelineViewSet, basename='regulatory-timelines')
 
-
-router.register(r'categories', views.InfrastructureCategoryViewSet, basename='infrastructure-categories')
-router.register(r'facilities', views.LaboratoryFacilityViewSet, basename='laboratory-facilities')
+# ============= INFRASTRUCTURE & EQUIPMENT ENDPOINTS =============
+router.register(r'infrastructure-categories', views.InfrastructureCategoryViewSet, basename='infrastructure-categories')
+router.register(r'laboratory-facilities', views.LaboratoryFacilityViewSet, basename='laboratory-facilities')
 router.register(r'equipment', views.EquipmentViewSet, basename='equipment')
-router.register(r'projects', views.InfrastructureProjectViewSet, basename='infrastructure-projects')
-router.register(r'training', views.TrainingCapacityViewSet, basename='training-capacity')
-router.register(r'assessments', views.InfrastructureAssessmentViewSet, basename='infrastructure-assessments')
+router.register(r'infrastructure-projects', views.InfrastructureProjectViewSet, basename='infrastructure-projects')
+router.register(r'training-capacities', views.TrainingCapacityViewSet, basename='training-capacities')
+router.register(r'infrastructure-assessments', views.InfrastructureAssessmentViewSet, basename='infrastructure-assessments')
 
 urlpatterns = [
     path('', include(router.urls)),

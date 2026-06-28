@@ -1,4 +1,5 @@
-#core/serializers.py
+# core/serializers.py
+
 from rest_framework import serializers
 from .models import *
 
@@ -15,8 +16,8 @@ class CountryListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Country
         fields = ['id', 'name', 'code', 'region', 'region_name', 'flag_emoji',
-                  'biosafety_status', 'readiness_score', 'active_projects',
-                  'confined_field_trials', 'publications_count']
+                  'ged_guidelines', 'international_alignment', 'biosafety_status', 'readiness_score', 'active_projects',
+                  'confined_field_trials', 'institutions_count', 'notes', 'publications_count']
 
 
 class CountryDetailSerializer(serializers.ModelSerializer):
@@ -27,38 +28,45 @@ class CountryDetailSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-from rest_framework import serializers
+# ============= INSTITUTION SERIALIZERS =============
 
 class InstitutionSerializer(serializers.ModelSerializer):
-    # Returns a list of country IDs for writes/reads
+    """
+    Serializer for Institution with many-to-many countries support
+    """
     countries = serializers.PrimaryKeyRelatedField(
         many=True, 
         queryset=Country.objects.all(),
         required=False
     )
     
-    # Returns detailed array of country objects (read-only)
     countries_details = serializers.SerializerMethodField()
+    countries_list = serializers.SerializerMethodField()
     
     class Meta:
         model = Institution
         fields = [
-            'id', 'name', 'acronym', 'type', 'countries', 'countries_details', 
-            'website', 'email', 'phone', 'address', 'description', 
-            'logo', 'established_year', 'is_active'
+            'id', 'name', 'acronym', 'type', 'countries', 'countries_details',
+            'countries_list', 'website', 'email', 'phone', 'address', 
+            'description', 'logo', 'established_year', 'is_active'
         ]
 
     def get_countries_details(self, obj):
-        """Returns a list of dicts with name and code for all associated countries."""
         return [
             {
                 'id': country.id,
                 'name': country.name,
-                'code': getattr(country, 'code', None) # Safely get code if it exists
+                'code': country.code,
+                'region': country.region.name if hasattr(country, 'region') else None
             } 
             for country in obj.countries.all()
         ]
+    
+    def get_countries_list(self, obj):
+        return [country.name for country in obj.countries.all()]
 
+
+# ============= EXPERT SERIALIZERS =============
 
 class ExpertListSerializer(serializers.ModelSerializer):
     institution_name = serializers.CharField(source='institution.name', read_only=True)
@@ -84,9 +92,6 @@ class ExpertDetailSerializer(serializers.ModelSerializer):
 # ============= ORGANISM SERIALIZERS =============
 
 class OrganismCategorySerializer(serializers.ModelSerializer):
-    """
-    Serializer for Organism Category (Plant, Animal, Micro-organism, etc.)
-    """
     organism_count = serializers.SerializerMethodField()
     category_type_display = serializers.CharField(source='get_category_type_display', read_only=True)
     
@@ -100,9 +105,6 @@ class OrganismCategorySerializer(serializers.ModelSerializer):
 
 
 class OrganismListSerializer(serializers.ModelSerializer):
-    """
-    List serializer for Organism (lightweight)
-    """
     category_name = serializers.CharField(source='category.name', read_only=True)
     category_type = serializers.CharField(source='category.category_type', read_only=True)
     category_icon = serializers.CharField(source='category.icon', read_only=True)
@@ -124,9 +126,6 @@ class OrganismListSerializer(serializers.ModelSerializer):
 
 
 class OrganismDetailSerializer(serializers.ModelSerializer):
-    """
-    Detailed serializer for Organism
-    """
     category_name = serializers.CharField(source='category.name', read_only=True)
     category_type = serializers.CharField(source='category.category_type', read_only=True)
     category_type_display = serializers.CharField(source='category.get_category_type_display', read_only=True)
@@ -148,12 +147,9 @@ class OrganismDetailSerializer(serializers.ModelSerializer):
         return obj.projects.count()
 
 
-# ============= PROJECT SERIALIZERS (UPDATED) =============
+# ============= PROJECT SERIALIZERS =============
 
 class ProjectListSerializer(serializers.ModelSerializer):
-    """
-    List serializer for Project (lightweight)
-    """
     country_name = serializers.CharField(source='country.name', read_only=True)
     lead_institution_name = serializers.CharField(source='lead_institution.name', read_only=True)
     primary_organism_name = serializers.SerializerMethodField()
@@ -192,9 +188,6 @@ class ProjectListSerializer(serializers.ModelSerializer):
 
 
 class ProjectDetailSerializer(serializers.ModelSerializer):
-    """
-    Detailed serializer for Project
-    """
     country_name = serializers.CharField(source='country.name', read_only=True)
     country_code = serializers.CharField(source='country.code', read_only=True)
     lead_institution_name = serializers.CharField(source='lead_institution.name', read_only=True)
@@ -216,7 +209,6 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
         fields = '__all__'
     
     def get_organisms_by_category(self, obj):
-        """Group organisms by category"""
         from collections import defaultdict
         categories = defaultdict(list)
         for organism in obj.organisms.all():
@@ -236,9 +228,6 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
 
 
 class ProjectCreateUpdateSerializer(serializers.ModelSerializer):
-    """
-    Serializer for creating and updating Projects
-    """
     class Meta:
         model = Project
         fields = '__all__'
@@ -416,9 +405,6 @@ class EventDetailSerializer(serializers.ModelSerializer):
 # ============= DASHBOARD STATS SERIALIZER =============
 
 class DashboardStatsSerializer(serializers.Serializer):
-    """
-    Serializer for dashboard statistics
-    """
     total_countries = serializers.IntegerField()
     total_projects = serializers.IntegerField()
     total_publications = serializers.IntegerField()
@@ -433,6 +419,7 @@ class DashboardStatsSerializer(serializers.Serializer):
     organisms_by_category = serializers.DictField()
 
 
+# ============= REGULATORY FRAMEWORK SERIALIZERS =============
 
 class MultilateralAgreementSerializer(serializers.ModelSerializer):
     agreement_type_display = serializers.CharField(source='get_agreement_type_display', read_only=True)
@@ -517,7 +504,6 @@ class RegulatoryFrameworkDetailSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     approach_display = serializers.CharField(source='get_approach_display', read_only=True)
     
-    # Nested serializers
     multilateral_agreements = MultilateralAgreementSerializer(many=True, read_only=True)
     regulatory_institutions = RegulatoryInstitutionSerializer(many=True, read_only=True)
     regulatory_instruments = RegulatoryInstrumentSerializer(many=True, read_only=True)
@@ -546,8 +532,20 @@ class RegulatoryFrameworkCreateUpdateSerializer(serializers.ModelSerializer):
         ]
 
 
+# ============= INFRASTRUCTURE & EQUIPMENT SERIALIZERS =============
+# Note: These are imported from the infrastructure app
+# Make sure the infrastructure app is installed and models are available
 
-#Kiambe
+try:
+    from infrastructure.models import (
+        InfrastructureCategory, LaboratoryFacility, Equipment,
+        InfrastructureProject, TrainingCapacity, InfrastructureAssessment
+    )
+except ImportError:
+    # Fallback if infrastructure app is not available
+    pass
+
+
 class InfrastructureCategorySerializer(serializers.ModelSerializer):
     category_type_display = serializers.CharField(source='get_category_type_display', read_only=True)
     facility_count = serializers.SerializerMethodField()
@@ -582,6 +580,8 @@ class EquipmentSerializer(serializers.ModelSerializer):
 class LaboratoryFacilityListSerializer(serializers.ModelSerializer):
     institution_name = serializers.CharField(source='institution.name', read_only=True)
     category_name = serializers.CharField(source='category.name', read_only=True)
+    country_name = serializers.CharField(source='country.name', read_only=True)
+    country_code = serializers.CharField(source='country.code', read_only=True)
     biosafety_level_display = serializers.CharField(source='get_biosafety_level_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     equipment_count = serializers.SerializerMethodField()
@@ -590,18 +590,44 @@ class LaboratoryFacilityListSerializer(serializers.ModelSerializer):
         model = LaboratoryFacility
         fields = [
             'id', 'institution', 'institution_name', 'category', 'category_name',
-            'name', 'facility_type', 'biosafety_level', 'biosafety_level_display',
+            'country', 'country_name', 'country_code', 'name', 'biosafety_level', 'biosafety_level_display',
             'status', 'status_display', 'description', 'equipment_count',
             'researcher_count', 'is_active'
         ]
-    
+
     def get_equipment_count(self, obj):
         return obj.equipment.filter(is_active=True).count()
+    
+    def get_country_name(self, obj):
+        """Get country name"""
+        return obj.country.name if obj.country else None
+    
+    def get_country_code(self, obj):
+        """Get country code"""
+        return obj.country.code if obj.country else None
+        
+    def get_biosafety_level_display(self, obj):
+        """Return display names for biosafety levels"""
+        if not obj.biosafety_level:
+            return ['Not specified']
+        
+        # Handle both string and list
+        levels = obj.biosafety_level if isinstance(obj.biosafety_level, list) else [obj.biosafety_level]
+        level_map = dict(LaboratoryFacility.BIOSAFETY_LEVELS)
+        
+        display_levels = []
+        for level in levels:
+            if level:
+                display_levels.append(level_map.get(level, level.upper()))
+        
+        return display_levels if display_levels else ['Not specified']
+
 
 
 class LaboratoryFacilityDetailSerializer(serializers.ModelSerializer):
     institution_detail = InstitutionSerializer(source='institution', read_only=True)
     category_detail = InfrastructureCategorySerializer(source='category', read_only=True)
+    country_detail = CountryListSerializer(source='country', read_only=True)
     biosafety_level_display = serializers.CharField(source='get_biosafety_level_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     equipment = EquipmentSerializer(many=True, read_only=True)
@@ -610,7 +636,7 @@ class LaboratoryFacilityDetailSerializer(serializers.ModelSerializer):
         model = LaboratoryFacility
         fields = [
             'id', 'institution', 'institution_detail', 'category', 'category_detail',
-            'name', 'facility_type', 'biosafety_level', 'biosafety_level_display',
+            'country', 'country_detail', 'name', 'facility_type', 'biosafety_level', 'biosafety_level_display',
             'status', 'status_display', 'description', 'limitations', 'support_needed',
             'equipment_list', 'equipment_needs', 'capacity_description',
             'researcher_count', 'contact_person', 'contact_email', 'contact_phone',
@@ -623,7 +649,7 @@ class LaboratoryFacilityCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = LaboratoryFacility
         fields = [
-            'institution', 'category', 'name', 'facility_type', 'biosafety_level',
+            'institution', 'category', 'country', 'name', 'facility_type', 'biosafety_level',
             'status', 'description', 'limitations', 'support_needed',
             'equipment_list', 'equipment_needs', 'capacity_description',
             'researcher_count', 'contact_person', 'contact_email', 'contact_phone',

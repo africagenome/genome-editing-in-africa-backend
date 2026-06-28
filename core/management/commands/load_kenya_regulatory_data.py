@@ -3,11 +3,7 @@
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from datetime import date
-from core.models import Country, Institution
-from regulatory.models import (
-    RegulatoryFramework, MultilateralAgreement, RegulatoryInstitution,
-    RegulatoryInstrument, GedRegulatoryStatus, RegulatoryTimeline
-)
+from core.models import *
 
 
 class Command(BaseCommand):

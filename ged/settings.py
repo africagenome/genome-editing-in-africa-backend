@@ -144,18 +144,22 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = 'static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_DIRS = [BASE_DIR / 'static']
+STATIC_URL = '/static/django/'
+#STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATIC_ROOT = '/var/www/genome-editing-in-africa-backend/static/'
 
+#STATICFILES_DIRS = [BASE_DIR / 'static']
+STATICFILES_DIRS = ['/var/www/genome-editing-in-africa-backend/staticfiles/']
 MEDIA_URL = 'media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+#MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = '/var/www/genome-editing-in-africa-backend/media/'
+
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS
 CORS_ALLOW_ALL_ORIGINS = DEBUG
-CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
+CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000,https://www.genome.africa:3000,https://genome.africa:3000').split(',')
 
 # REST Framework
 REST_FRAMEWORK = {

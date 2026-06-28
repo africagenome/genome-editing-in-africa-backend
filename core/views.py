@@ -1,21 +1,25 @@
-from rest_framework import viewsets, filters, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticatedOrReadOnly, AllowAny
-from django_filters.rest_framework import DjangoFilterBackend
+# core/views.py
+
 from django.db.models import Q, Count, Avg, Sum
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+
+# Django Filter Imports
+from django_filters.rest_framework import DjangoFilterBackend
+
+# Django REST Framework Imports
+from rest_framework import viewsets, status
+from rest_framework import filters as drf_filters  # Aliased to prevent conflicts
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticatedOrReadOnly, AllowAny
+
 from .models import *
 from .serializers import *
-from .filters import (
-    CountryFilter, ProjectFilter, ExpertFilter, PublicationFilter,
-    ProtocolFilter, EventFilter, OrganismFilter
-)
+from .filters import *
 
 
-
-
+# ============= REGION VIEWSET =============
 
 class RegionViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -26,7 +30,7 @@ class RegionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Region.objects.all()
     serializer_class = RegionSerializer
     permission_classes = [AllowAny]
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
     search_fields = ['name', 'code']
     ordering_fields = ['order', 'name']
     
@@ -39,6 +43,8 @@ class RegionViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
 
+# ============= COUNTRY VIEWSET =============
+
 class CountryViewSet(viewsets.ReadOnlyModelViewSet):
     """
     API endpoint for African countries.
@@ -48,7 +54,7 @@ class CountryViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = Country.objects.all()
     permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
     filterset_class = CountryFilter
     search_fields = ['name', 'code', 'capital']
     ordering_fields = ['name', 'readiness_score', 'active_projects']
@@ -107,6 +113,8 @@ class CountryViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(stats)
 
 
+# ============= INSTITUTION VIEWSET =============
+
 class InstitutionViewSet(viewsets.ReadOnlyModelViewSet):
     """
     API endpoint for institutions (research centers, regulatory bodies, universities).
@@ -114,8 +122,8 @@ class InstitutionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Institution.objects.filter(is_active=True)
     serializer_class = InstitutionSerializer
     permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['type', 'country']
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
+    filterset_fields = ['type', 'countries']
     search_fields = ['name', 'acronym', 'description']
     ordering_fields = ['name']
     
@@ -144,6 +152,8 @@ class InstitutionViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
 
+# ============= EXPERT VIEWSET =============
+
 class ExpertViewSet(viewsets.ReadOnlyModelViewSet):
     """
     API endpoint for genome editing experts and researchers.
@@ -152,7 +162,7 @@ class ExpertViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = Expert.objects.filter(is_verified=True)
     permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
     filterset_class = ExpertFilter
     search_fields = ['name', 'bio', 'institution__name', 'title']
     ordering_fields = ['name', 'publications_count']
@@ -173,8 +183,6 @@ class ExpertViewSet(viewsets.ReadOnlyModelViewSet):
     def publications(self, request, pk=None):
         """Get publications by this expert"""
         expert = self.get_object()
-        # This would require a many-to-many relationship between Expert and Publication
-        # For now, return empty list or filter by author name
         publications = Publication.objects.filter(authors__icontains=expert.name)
         serializer = PublicationListSerializer(publications, many=True)
         return Response(serializer.data)
@@ -191,7 +199,7 @@ class OrganismCategoryViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = OrganismCategory.objects.filter(is_active=True)
     serializer_class = OrganismCategorySerializer
     permission_classes = [AllowAny]
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [drf_filters.SearchFilter, drf_filters.OrderingFilter]
     search_fields = ['name', 'description']
     ordering_fields = ['order', 'name']
     
@@ -226,7 +234,7 @@ class OrganismViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = Organism.objects.filter(is_active=True)
     permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
     filterset_class = OrganismFilter
     search_fields = ['common_name', 'scientific_name', 'custom_name', 'description']
     ordering_fields = ['common_name', 'genome_size_mb', 'created_at']
@@ -264,10 +272,9 @@ class OrganismViewSet(viewsets.ReadOnlyModelViewSet):
         organism = self.get_object()
         projects = organism.projects.all()
         
-        # Apply optional filters
-        status = request.query_params.get('status')
-        if status:
-            projects = projects.filter(status=status)
+        status_param = request.query_params.get('status')
+        if status_param:
+            projects = projects.filter(status=status_param)
         
         country = request.query_params.get('country')
         if country:
@@ -307,7 +314,7 @@ class OrganismViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
 
-# ============= PROJECT VIEWSETS (UPDATED) =============
+# ============= PROJECT VIEWSETS =============
 
 class ProjectViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -317,9 +324,9 @@ class ProjectViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = Project.objects.all()
     permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
     filterset_class = ProjectFilter
-    search_fields = ['title', 'description', 'crop_focus', 'tags']
+    search_fields = ['title', 'description', 'tags']
     ordering_fields = ['start_year', 'title', 'created_at']
     
     def get_serializer_class(self):
@@ -396,7 +403,6 @@ class ProjectViewSet(viewsets.ReadOnlyModelViewSet):
         """Find similar projects based on country, technology, or organisms"""
         project = self.get_object()
         
-        # Find projects with same country or same technology or same organisms
         similar = Project.objects.filter(
             Q(country=project.country) |
             Q(technology=project.technology) |
@@ -407,13 +413,15 @@ class ProjectViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
 
+# ============= PUBLICATION VIEWSET =============
+
 class PublicationViewSet(viewsets.ReadOnlyModelViewSet):
     """
     API endpoint for publications, reports, and policy briefs.
     """
     queryset = Publication.objects.all()
     permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
     filterset_class = PublicationFilter
     search_fields = ['title', 'authors', 'abstract', 'keywords']
     ordering_fields = ['-year', 'downloads']
@@ -455,13 +463,15 @@ class PublicationViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(result)
 
 
+# ============= PROTOCOL VIEWSET =============
+
 class ProtocolViewSet(viewsets.ReadOnlyModelViewSet):
     """
     API endpoint for laboratory protocols, SOPs, and technical guides.
     """
     queryset = Protocol.objects.all()
     permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
     filterset_class = ProtocolFilter
     search_fields = ['title', 'description', 'materials', 'steps']
     ordering_fields = ['-downloads', '-rating']
@@ -492,7 +502,6 @@ class ProtocolViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({'error': 'Rating must be between 1 and 5'}, 
                           status=status.HTTP_400_BAD_REQUEST)
         
-        # Calculate new average rating
         total_rating = protocol.rating * protocol.rating_count + rating
         protocol.rating_count += 1
         protocol.rating = total_rating / protocol.rating_count
@@ -519,6 +528,8 @@ class ProtocolViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
 
+# ============= CONSULTATION VIEWSET =============
+
 class ConsultationViewSet(viewsets.ReadOnlyModelViewSet):
     """
     API endpoint for public consultations on genome editing policies.
@@ -526,7 +537,7 @@ class ConsultationViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Consultation.objects.all()
     serializer_class = ConsultationSerializer
     permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter]
     filterset_fields = ['status', 'country']
     search_fields = ['title', 'description']
     
@@ -535,7 +546,6 @@ class ConsultationViewSet(viewsets.ReadOnlyModelViewSet):
         """Submit a response to an open consultation"""
         consultation = self.get_object()
         
-        # Check if consultation is still open
         if consultation.status != 'open' or consultation.closing_date < timezone.now().date():
             return Response({'error': 'This consultation is no longer accepting submissions'},
                           status=status.HTTP_400_BAD_REQUEST)
@@ -569,13 +579,15 @@ class ConsultationViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
 
+# ============= NEWS VIEWSET =============
+
 class NewsViewSet(viewsets.ReadOnlyModelViewSet):
     """
     API endpoint for news articles and announcements.
     """
     queryset = News.objects.all()
     permission_classes = [AllowAny]
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [drf_filters.SearchFilter, drf_filters.OrderingFilter]
     search_fields = ['title', 'summary', 'content']
     ordering_fields = ['-published_date']
     
@@ -607,6 +619,8 @@ class NewsViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
 
+# ============= FAQ VIEWSET =============
+
 class FAQViewSet(viewsets.ReadOnlyModelViewSet):
     """
     API endpoint for frequently asked questions.
@@ -614,7 +628,7 @@ class FAQViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = FAQ.objects.filter(is_published=True)
     serializer_class = FAQSerializer
     permission_classes = [AllowAny]
-    filter_backends = [filters.OrderingFilter]
+    filter_backends = [drf_filters.OrderingFilter]
     ordering_fields = ['order', 'category']
     filterset_fields = ['category']
     
@@ -633,6 +647,8 @@ class FAQViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(result)
 
 
+# ============= GLOSSARY VIEWSET =============
+
 class GlossaryTermViewSet(viewsets.ReadOnlyModelViewSet):
     """
     API endpoint for glossary terms.
@@ -640,11 +656,13 @@ class GlossaryTermViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = GlossaryTerm.objects.all()
     serializer_class = GlossaryTermSerializer
     permission_classes = [AllowAny]
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [drf_filters.SearchFilter, drf_filters.OrderingFilter]
     search_fields = ['term', 'definition']
     ordering_fields = ['term']
     filterset_fields = ['category']
 
+
+# ============= FUNDING VIEWSET =============
 
 class FundingOpportunityViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -653,7 +671,7 @@ class FundingOpportunityViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = FundingOpportunity.objects.all()
     serializer_class = FundingOpportunitySerializer
     permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
     filterset_fields = ['status']
     search_fields = ['title', 'description', 'donor']
     ordering_fields = ['deadline']
@@ -681,13 +699,15 @@ class FundingOpportunityViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
 
+# ============= EVENT VIEWSET =============
+
 class EventViewSet(viewsets.ReadOnlyModelViewSet):
     """
     API endpoint for workshops, conferences, and training events.
     """
     queryset = Event.objects.all()
     permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
     filterset_class = EventFilter
     search_fields = ['title', 'description', 'venue']
     ordering_fields = ['start_date']
@@ -728,6 +748,8 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer.data)
 
 
+# ============= DASHBOARD VIEWSET =============
+
 class DashboardViewSet(viewsets.GenericViewSet):
     """
     API endpoint for dashboard statistics and analytics.
@@ -755,10 +777,10 @@ class DashboardViewSet(viewsets.GenericViewSet):
             'featured_news': News.objects.filter(is_featured=True).count(),
         }
         return Response(stats)
-    
 
 
-# Kevin
+# ============= REGULATORY FRAMEWORK VIEWSETS =============
+
 class RegulatoryFrameworkViewSet(viewsets.ModelViewSet):
     """
     API endpoint for regulatory frameworks for genome editing in Africa.
@@ -768,7 +790,7 @@ class RegulatoryFrameworkViewSet(viewsets.ModelViewSet):
     """
     queryset = RegulatoryFramework.objects.all()
     permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
     filterset_fields = ['status', 'approach', 'country__region']
     search_fields = ['country__name', 'summary', 'country__code']
     ordering_fields = ['country__name', 'status', 'last_updated']
@@ -879,7 +901,7 @@ class MultilateralAgreementViewSet(viewsets.ModelViewSet):
     queryset = MultilateralAgreement.objects.all()
     serializer_class = MultilateralAgreementSerializer
     permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter]
     filterset_fields = ['agreement_type', 'framework__country']
     search_fields = ['name', 'framework__country__name']
 
@@ -891,7 +913,7 @@ class RegulatoryInstitutionViewSet(viewsets.ModelViewSet):
     queryset = RegulatoryInstitution.objects.filter(is_active=True)
     serializer_class = RegulatoryInstitutionSerializer
     permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter]
     filterset_fields = ['role', 'framework__country', 'institution']
     search_fields = ['institution__name', 'mandate']
 
@@ -903,7 +925,7 @@ class RegulatoryInstrumentViewSet(viewsets.ModelViewSet):
     queryset = RegulatoryInstrument.objects.filter(is_current=True)
     serializer_class = RegulatoryInstrumentSerializer
     permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter]
     filterset_fields = ['instrument_type', 'coverage', 'framework__country']
     search_fields = ['title', 'summary']
 
@@ -915,7 +937,7 @@ class GedRegulatoryStatusViewSet(viewsets.ModelViewSet):
     queryset = GedRegulatoryStatus.objects.all()
     serializer_class = GedRegulatoryStatusSerializer
     permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter]
     filterset_fields = ['category', 'status', 'framework__country']
     search_fields = ['description']
 
@@ -927,12 +949,13 @@ class RegulatoryTimelineViewSet(viewsets.ModelViewSet):
     queryset = RegulatoryTimeline.objects.all()
     serializer_class = RegulatoryTimelineSerializer
     permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, drf_filters.OrderingFilter]
     filterset_fields = ['event_type', 'framework__country']
     ordering_fields = ['event_date']
 
 
-#Kiambe
+# ============= INFRASTRUCTURE & EQUIPMENT VIEWSETS =============
+
 class InfrastructureCategoryViewSet(viewsets.ModelViewSet):
     """
     API endpoint for infrastructure categories
@@ -940,9 +963,47 @@ class InfrastructureCategoryViewSet(viewsets.ModelViewSet):
     queryset = InfrastructureCategory.objects.filter(is_active=True)
     serializer_class = InfrastructureCategorySerializer
     permission_classes = [AllowAny]
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [drf_filters.SearchFilter, drf_filters.OrderingFilter]
     search_fields = ['name', 'description']
     ordering_fields = ['order', 'name']
+
+
+class LaboratoryFacilityFilter(filters.FilterSet):
+    """
+    Filter for LaboratoryFacility model
+    """
+    biosafety_level = filters.MultipleChoiceFilter(
+        choices=LaboratoryFacility.BIOSAFETY_LEVELS,
+        field_name='biosafety_level',
+        lookup_expr='icontains'
+    )
+    status = filters.MultipleChoiceFilter(
+        choices=LaboratoryFacility.STATUS_CHOICES
+    )
+    category = filters.NumberFilter(field_name='category__id')
+    institution = filters.NumberFilter(field_name='institution__id')
+    country = filters.NumberFilter(field_name='institution__country__id')
+    search = filters.CharFilter(method='filter_search')
+    is_active = filters.BooleanFilter()
+    
+    class Meta:
+        model = LaboratoryFacility
+        fields = {
+            'status': ['exact'],
+            'biosafety_level': ['icontains', 'exact'],
+            'category': ['exact'],
+            'institution': ['exact'],
+            'is_active': ['exact'],
+        }
+    
+    def filter_search(self, queryset, name, value):
+        return queryset.filter(
+            models.Q(name__icontains=value) |
+            models.Q(abbreviation__icontains=value) |
+            models.Q(institution__name__icontains=value) |
+            models.Q(description__icontains=value) |
+            models.Q(facility_type__icontains=value)
+        )
 
 
 class LaboratoryFacilityViewSet(viewsets.ModelViewSet):
@@ -951,10 +1012,13 @@ class LaboratoryFacilityViewSet(viewsets.ModelViewSet):
     """
     queryset = LaboratoryFacility.objects.filter(is_active=True)
     permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['status', 'biosafety_level', 'category', 'institution', 'institution__country']
-    search_fields = ['name', 'institution__name', 'facility_type', 'description']
-    ordering_fields = ['institution__name', 'name', 'status']
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
+    filterset_class = LaboratoryFacilityFilter
+    search_fields = ['name', 'abbreviation', 'institution__name', 'country__name', 'facility_type', 'description']
+    ordering_fields = ['institution__name', 'country__name', 'name', 'status', 'created_at']
+
+
+
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -970,9 +1034,13 @@ class LaboratoryFacilityViewSet(viewsets.ModelViewSet):
         country_name = request.query_params.get('name')
         
         if country_code:
-            facilities = self.get_queryset().filter(institution__country__code__iexact=country_code)
+            facilities = self.get_queryset().filter(
+                country__code__iexact=country_code
+            )
         elif country_name:
-            facilities = self.get_queryset().filter(institution__country__name__iexact=country_name)
+            facilities = self.get_queryset().filter(
+                country__name__iexact=country_name
+            )
         else:
             return Response(
                 {'error': 'Please provide either code or name parameter'},
@@ -982,31 +1050,55 @@ class LaboratoryFacilityViewSet(viewsets.ModelViewSet):
         serializer = LaboratoryFacilityListSerializer(facilities, many=True)
         return Response(serializer.data)
 
+
+
+
+
     @action(detail=False, methods=['get'])
     def stats(self, request):
         """Get statistics about laboratory facilities"""
         total = LaboratoryFacility.objects.filter(is_active=True).count()
+        
         by_status = dict(
             LaboratoryFacility.objects.filter(is_active=True)
             .values_list('status')
             .annotate(count=Count('id'))
         )
-        by_biosafety = dict(
-            LaboratoryFacility.objects.filter(is_active=True)
-            .values_list('biosafety_level')
-            .annotate(count=Count('id'))
-        )
+        
+        # Handle MultiSelectField for biosafety_level
+        biosafety_counts = {}
+        for level, label in LaboratoryFacility.BIOSAFETY_LEVELS:
+            count = LaboratoryFacility.objects.filter(
+                is_active=True,
+                biosafety_level__icontains=level
+            ).count()
+            if count > 0:
+                biosafety_counts[level] = count
+        
         by_category = dict(
             LaboratoryFacility.objects.filter(is_active=True)
             .values_list('category__name')
             .annotate(count=Count('id'))
         )
         
+        # Country counts - now using direct country field
+        by_country = list(
+            LaboratoryFacility.objects.filter(is_active=True)
+            .values('country__name')
+            .annotate(count=Count('id'))
+            .order_by('-count')[:10]
+        )
+        
+
+
+
+
         stats = {
             'total_facilities': total,
             'by_status': by_status,
-            'by_biosafety_level': by_biosafety,
+            'by_biosafety_level': biosafety_counts,
             'by_category': by_category,
+            'by_country': by_country,  
             'fully_equipped': LaboratoryFacility.objects.filter(
                 is_active=True, status='fully_equipped'
             ).count(),
@@ -1032,8 +1124,8 @@ class EquipmentViewSet(viewsets.ModelViewSet):
     queryset = Equipment.objects.filter(is_active=True)
     serializer_class = EquipmentSerializer
     permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['equipment_type', 'status', 'condition', 'facility', 'facility__institution__country']
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
+    filterset_fields = ['equipment_type', 'status', 'condition', 'facility']
     search_fields = ['name', 'model', 'manufacturer', 'serial_number']
     ordering_fields = ['name', 'acquisition_date']
 
@@ -1041,24 +1133,16 @@ class EquipmentViewSet(viewsets.ModelViewSet):
     def by_country(self, request):
         """Get equipment by country"""
         country_code = request.query_params.get('code')
-        country_name = request.query_params.get('name')
-        
         if country_code:
             equipment = self.get_queryset().filter(
                 facility__institution__country__code__iexact=country_code
             )
-        elif country_name:
-            equipment = self.get_queryset().filter(
-                facility__institution__country__name__iexact=country_name
-            )
-        else:
-            return Response(
-                {'error': 'Please provide either code or name parameter'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        serializer = self.get_serializer(equipment, many=True)
-        return Response(serializer.data)
+            serializer = self.get_serializer(equipment, many=True)
+            return Response(serializer.data)
+        return Response(
+            {'error': 'Please provide country code parameter'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     @action(detail=False, methods=['get'])
     def stats(self, request):
@@ -1096,7 +1180,7 @@ class InfrastructureProjectViewSet(viewsets.ModelViewSet):
     queryset = InfrastructureProject.objects.filter(is_active=True)
     serializer_class = InfrastructureProjectSerializer
     permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
     filterset_fields = ['status', 'priority', 'country', 'institution']
     search_fields = ['title', 'description', 'objectives']
     ordering_fields = ['start_date', 'end_date', 'priority']
@@ -1105,20 +1189,14 @@ class InfrastructureProjectViewSet(viewsets.ModelViewSet):
     def by_country(self, request):
         """Get infrastructure projects by country"""
         country_code = request.query_params.get('code')
-        country_name = request.query_params.get('name')
-        
         if country_code:
             projects = self.get_queryset().filter(country__code__iexact=country_code)
-        elif country_name:
-            projects = self.get_queryset().filter(country__name__iexact=country_name)
-        else:
-            return Response(
-                {'error': 'Please provide either code or name parameter'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        serializer = self.get_serializer(projects, many=True)
-        return Response(serializer.data)
+            serializer = self.get_serializer(projects, many=True)
+            return Response(serializer.data)
+        return Response(
+            {'error': 'Please provide country code parameter'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
 
 class TrainingCapacityViewSet(viewsets.ModelViewSet):
@@ -1128,8 +1206,8 @@ class TrainingCapacityViewSet(viewsets.ModelViewSet):
     queryset = TrainingCapacity.objects.filter(is_active=True)
     serializer_class = TrainingCapacitySerializer
     permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['training_type', 'skill_level', 'institution', 'institution__country']
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
+    filterset_fields = ['training_type', 'skill_level', 'institution']
     search_fields = ['title', 'description', 'institution__name']
     ordering_fields = ['start_date', 'title']
 
@@ -1148,7 +1226,7 @@ class InfrastructureAssessmentViewSet(viewsets.ModelViewSet):
     queryset = InfrastructureAssessment.objects.all()
     serializer_class = InfrastructureAssessmentSerializer
     permission_classes = [AllowAny]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
     filterset_fields = ['assessment_area', 'priority', 'country']
     search_fields = ['title', 'description']
     ordering_fields = ['-assessment_date']
@@ -1157,17 +1235,11 @@ class InfrastructureAssessmentViewSet(viewsets.ModelViewSet):
     def by_country(self, request):
         """Get infrastructure assessments by country"""
         country_code = request.query_params.get('code')
-        country_name = request.query_params.get('name')
-        
         if country_code:
             assessments = self.get_queryset().filter(country__code__iexact=country_code)
-        elif country_name:
-            assessments = self.get_queryset().filter(country__name__iexact=country_name)
-        else:
-            return Response(
-                {'error': 'Please provide either code or name parameter'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        serializer = self.get_serializer(assessments, many=True)
-        return Response(serializer.data)
+            serializer = self.get_serializer(assessments, many=True)
+            return Response(serializer.data)
+        return Response(
+            {'error': 'Please provide country code parameter'},
+            status=status.HTTP_400_BAD_REQUEST
+        )

@@ -1,9 +1,11 @@
 # core/admin.py
-
+from django import forms
 from django.contrib import admin
 from django.utils.html import format_html
 from import_export.admin import ExportActionMixin
 from .models import *
+#from multi_select_field import MultiSelectFormField 
+from multiselectfield import MultiSelectField
 
 
 @admin.register(Region)
@@ -314,16 +316,47 @@ class InfrastructureCategoryAdmin(admin.ModelAdmin):
     search_fields = ['name', 'description']
 
 
+class LaboratoryFacilityAdminForm(forms.ModelForm):
+    """Custom form for LaboratoryFacility to handle MultiSelectField"""
+    
+    class Meta:
+        model = LaboratoryFacility
+        fields = '__all__'
+        widgets = {
+            'biosafety_level': forms.CheckboxSelectMultiple(),  # This creates checkboxes instead of multi-select
+        }
+
+
 @admin.register(LaboratoryFacility)
 class LaboratoryFacilityAdmin(admin.ModelAdmin):
-    list_display = ['name', 'institution', 'biosafety_level', 'status', 'researcher_count']
-    list_filter = ['status', 'biosafety_level', 'category']
-    search_fields = ['name', 'institution__name', 'facility_type']
+    form = LaboratoryFacilityAdminForm  # Use the custom form
+    
+    list_display = [
+        'name', 
+        'abbreviation', 
+        'institution',
+        'country_name',
+        'category', 
+        'display_biosafety_levels', 
+        'status', 
+        'researcher_count', 
+        'is_active'
+    ]
+    list_filter = [
+        'status', 
+        'biosafety_level',
+        'country',
+        'category', 
+        'is_active'
+    ]
+    search_fields = ['name', 'abbreviation', 'institution__name', 'facility_type', 'description']
+    autocomplete_fields = ['institution', 'category', 'country']
     readonly_fields = ['last_updated', 'created_at', 'updated_at']
+    # Remove filter_horizontal - not needed for MultiSelectField
     
     fieldsets = (
         ('Basic Information', {
-            'fields': ('institution', 'category', 'name', 'facility_type', 'biosafety_level', 'status')
+            'fields': ('institution', 'category', 'country', 'name', 'abbreviation', 'facility_type', 'biosafety_level', 'status')
         }),
         ('Description', {
             'fields': ('description', 'limitations', 'support_needed')
@@ -340,7 +373,38 @@ class LaboratoryFacilityAdmin(admin.ModelAdmin):
         }),
     )
     
-    inlines = [EquipmentInline]
+    inlines = [EquipmentInline]  # If you have an EquipmentInline
+    
+    def display_biosafety_levels(self, obj):
+        """Display biosafety levels as colored badges"""
+        if not obj.biosafety_level:
+            return 'Not specified'
+        
+        # Handle both string and list values
+        levels = obj.biosafety_level if isinstance(obj.biosafety_level, list) else [obj.biosafety_level]
+        
+        colors = {
+            'bsl1': '#2ecc71',
+            'bsl2': '#3498db',
+            'bsl3': '#f39c12',
+            'bsl4': '#e74c3c',
+            'none': '#95a5a6'
+        }
+        level_map = dict(LaboratoryFacility.BIOSAFETY_LEVELS)
+        
+        badges = []
+        for level in levels:
+            if level:  # Skip empty values
+                color = colors.get(level, '#95a5a6')
+                label = level_map.get(level, level.upper())
+                badges.append(f'<span style="background-color: {color}; color: white; padding: 2px 8px; border-radius: 4px; margin: 2px; font-size: 0.75rem;">{label}</span>')
+        
+        return format_html(' '.join(badges)) if badges else 'Not specified'
+    display_biosafety_levels.short_description = 'Biosafety Levels'
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('institution', 'category')
+
 
 
 @admin.register(Equipment)

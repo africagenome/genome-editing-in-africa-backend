@@ -1,5 +1,11 @@
+# core/filters.py
+
 from django_filters import rest_framework as filters
-from .models import Country, Project, Expert, Publication, Protocol, Event, Organism
+from django.db import models
+from .models import (
+    Country, Project, Expert, Publication, Protocol, 
+    Event, Organism, Institution, LaboratoryFacility
+)
 
 
 class CountryFilter(filters.FilterSet):
@@ -18,6 +24,31 @@ class CountryFilter(filters.FilterSet):
         return queryset.filter(
             models.Q(name__icontains=value) |
             models.Q(code__icontains=value)
+        )
+
+
+class InstitutionFilter(filters.FilterSet):
+    countries = filters.NumberFilter(field_name='countries', lookup_expr='id')
+    country_name = filters.CharFilter(field_name='countries__name', lookup_expr='icontains')
+    type = filters.CharFilter(field_name='type', lookup_expr='icontains')
+    name = filters.CharFilter(field_name='name', lookup_expr='icontains')
+    is_active = filters.BooleanFilter(field_name='is_active')
+    search = filters.CharFilter(method='filter_search')
+    
+    class Meta:
+        model = Institution
+        fields = {
+            'type': ['exact'],
+            'name': ['icontains', 'exact'],
+            'is_active': ['exact'],
+            'countries': ['exact', 'in'],
+        }
+    
+    def filter_search(self, queryset, name, value):
+        return queryset.filter(
+            models.Q(name__icontains=value) |
+            models.Q(acronym__icontains=value) |
+            models.Q(description__icontains=value)
         )
 
 
@@ -129,4 +160,61 @@ class OrganismFilter(filters.FilterSet):
             models.Q(scientific_name__icontains=value) |
             models.Q(custom_name__icontains=value) |
             models.Q(description__icontains=value)
+        )
+
+
+class LaboratoryFacilityFilter(filters.FilterSet):
+    """
+    Filter for LaboratoryFacility model.
+    Supports filtering by biosafety levels (MultiSelectField), status, category, institution, and country.
+    """
+    biosafety_level = filters.MultipleChoiceFilter(
+        choices=LaboratoryFacility.BIOSAFETY_LEVELS,
+        field_name='biosafety_level',
+        lookup_expr='icontains'
+    )
+    biosafety_level_exact = filters.MultipleChoiceFilter(
+        choices=LaboratoryFacility.BIOSAFETY_LEVELS,
+        field_name='biosafety_level',
+        lookup_expr='exact'
+    )
+    status = filters.MultipleChoiceFilter(
+        choices=LaboratoryFacility.STATUS_CHOICES
+    )
+    category = filters.NumberFilter(field_name='category__id')
+    category_name = filters.CharFilter(field_name='category__name', lookup_expr='icontains')
+    institution = filters.NumberFilter(field_name='institution__id')
+    institution_name = filters.CharFilter(field_name='institution__name', lookup_expr='icontains')
+    # Country filters - now direct field
+    country = filters.NumberFilter(field_name='country__id')
+    country_code = filters.CharFilter(field_name='country__code', lookup_expr='iexact')
+    country_name = filters.CharFilter(field_name='country__name', lookup_expr='icontains')
+
+    is_active = filters.BooleanFilter()
+    min_researchers = filters.NumberFilter(field_name='researcher_count', lookup_expr='gte')
+    max_researchers = filters.NumberFilter(field_name='researcher_count', lookup_expr='lte')
+    search = filters.CharFilter(method='filter_search')
+    
+    class Meta:
+        model = LaboratoryFacility
+        fields = {
+            'status': ['exact'],
+            'biosafety_level': ['icontains', 'exact'],
+            'category': ['exact'],
+            'institution': ['exact'],
+            'country': ['exact'], 
+            'is_active': ['exact'],
+            'researcher_count': ['gte', 'lte'],
+        }
+    
+    def filter_search(self, queryset, name, value):
+        return queryset.filter(
+            models.Q(name__icontains=value) |
+            models.Q(abbreviation__icontains=value) |
+            models.Q(institution__name__icontains=value) |
+            models.Q(country__name__icontains=value) | 
+            models.Q(description__icontains=value) |
+            models.Q(facility_type__icontains=value) |
+            models.Q(equipment_list__icontains=value) |
+            models.Q(support_needed__icontains=value)
         )
