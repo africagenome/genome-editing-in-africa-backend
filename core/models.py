@@ -46,52 +46,7 @@ class Organism(models.Model):
     """
     Organisms used in genome editing projects (plants, animals, microorganisms)
     """
-    COMMON_NAME_CHOICES = [
-        ('maize', 'Maize / Corn'),
-        ('cassava', 'Cassava'),
-        ('sorghum', 'Sorghum'),
-        ('cowpea', 'Cowpea'),
-        ('banana', 'Banana'),
-        ('rice', 'Rice'),
-        ('wheat', 'Wheat'),
-        ('soybean', 'Soybean'),
-        ('teff', 'Teff'),
-        ('cotton', 'Cotton'),
-        ('tomato', 'Tomato'),
-        ('cattle', 'Cattle'),
-        ('pig', 'Pig'),
-        ('chicken', 'Chicken'),
-        ('goat', 'Goat'),
-        ('sheep', 'Sheep'),
-        ('fish', 'Fish'),
-        ('mosquito', 'Mosquito'),
-        ('e_coli', 'E. coli'),
-        ('yeast', 'Yeast'),
-        ('other', 'Other'),
-    ]
-    
-    SCIENTIFIC_NAME_CHOICES = [
-        ('zea_mays', 'Zea mays'),
-        ('manihot_esculenta', 'Manihot esculenta'),
-        ('sorghum_bicolor', 'Sorghum bicolor'),
-        ('vigna_unguiculata', 'Vigna unguiculata'),
-        ('musa_acuminata', 'Musa acuminata'),
-        ('oryza_sativa', 'Oryza sativa'),
-        ('triticum_aestivum', 'Triticum aestivum'),
-        ('glycine_max', 'Glycine max'),
-        ('eragrostis_tef', 'Eragrostis tef'),
-        ('gossypium_hirsutum', 'Gossypium hirsutum'),
-        ('solanum_lycopersicum', 'Solanum lycopersicum'),
-        ('bos_taurus', 'Bos taurus'),
-        ('sus_scrofa', 'Sus scrofa'),
-        ('gallus_gallus', 'Gallus gallus'),
-        ('capra_hircus', 'Capra hircus'),
-        ('ovis_aries', 'Ovis aries'),
-        ('anopheles_gambiae', 'Anopheles gambiae'),
-        ('escherichia_coli', 'Escherichia coli'),
-        ('saccharomyces_cerevisiae', 'Saccharomyces cerevisiae'),
-    ]
-    
+
     # Basic Information
     common_name = models.CharField(max_length=100, unique=True)
     scientific_name = models.CharField(max_length=100, unique=True)
@@ -1417,3 +1372,172 @@ class InfrastructureAssessment(models.Model):
 
     def __str__(self):
         return f"{self.country.name} - {self.title} ({self.assessment_date})"
+
+
+
+class NationalPriorityCrop(models.Model):
+    """
+    National priority crops that could potentially benefit from GEd technology
+    Based on South African National Agricultural and Development Strategy
+    """
+    
+    GED_POTENTIAL_CHOICES = [
+        ('Low', 'Low'),
+        ('Medium', 'Medium'),
+        ('High', 'High'),
+    ]
+
+
+    # Relationships
+    country = models.ForeignKey(
+        Country, 
+        on_delete=models.CASCADE, 
+        related_name='priority_crops'
+    )
+    organism = models.ForeignKey(
+        Organism, 
+        on_delete=models.CASCADE, 
+        related_name='priority_crops'
+    )
+
+    # Trait Improvement
+    trait_improvement = models.TextField(
+        help_text="Traits for improvement (e.g., Striga, drought stress, nutrition, yield)"
+    )
+    
+    # Socio-Economic Importance
+    socio_economic_importance = models.TextField(
+        help_text="Socio-economic importance of the crop"
+    )
+    
+    # GEd Potential
+    ged_potential = models.CharField(
+        max_length=10,
+        choices=GED_POTENTIAL_CHOICES,
+        default='Medium',
+        help_text="GEd Potential (Low/Medium/High)"
+    )
+    
+    # Existing R&D
+    existing_rd = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Existing R&D activities (e.g., Agronomy, Yes-Drought, Yes-Viruses)"
+    )
+    existing_rd_details = models.TextField(
+        blank=True,
+        help_text="Detailed description of existing R&D"
+    )
+    
+    # Production Capacity
+    actual_annual_production = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Actual annual production capacity (tonnes) with citation"
+    )
+    actual_production_value = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Numeric value of actual production (tonnes)"
+    )
+    actual_production_citation = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Citation for actual production (e.g., Orr et al. 2016)"
+    )
+    
+    expected_annual_production = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Expected annual production capacity (tonnes)"
+    )
+    expected_production_value = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Numeric value of expected production (tonnes)"
+    )
+    
+    production_year = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Year of production data"
+    )
+    
+    # Order/Display
+    display_order = models.IntegerField(
+        default=0,
+        help_text="Order of display in the table"
+    )
+    
+    # Metadata
+    data_source = models.TextField(
+        default="South African National Agricultural and Development Strategy; Department of Agriculture's 2025–2030 Strategic Plan; Statistics South Africa",
+        help_text="Source of the data"
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['display_order', 'category', 'organism__common_name']
+        verbose_name = 'National Priority Crop for GEd'
+        verbose_name_plural = 'National Priority Crops for GEd'
+        unique_together = ['country', 'organism']
+    
+    def __str__(self):
+        return f"{self.organism.common_name} ({self.country.name}) - {self.get_ged_potential_display()}"
+    
+    @property
+    def ged_potential_display(self):
+        return self.get_ged_potential_display()
+    
+    @property
+    def ged_potential_icon(self):
+        """Return icon based on GEd potential"""
+        icons = {
+            'Low': 'fa-arrow-down text-danger',
+            'Medium': 'fa-minus text-warning',
+            'High': 'fa-arrow-up text-success'
+        }
+        return icons.get(self.ged_potential, 'fa-question')
+    
+    @property
+    def ged_potential_badge_class(self):
+        """Return Bootstrap badge class based on GEd potential"""
+        classes = {
+            'Low': 'bg-danger',
+            'Medium': 'bg-warning',
+            'High': 'bg-success'
+        }
+        return classes.get(self.ged_potential, 'bg-secondary')
+    
+    @property
+    def production_gap(self):
+        """Calculate the difference between expected and actual production"""
+        if self.expected_production_value and self.actual_production_value:
+            return self.expected_production_value - self.actual_production_value
+        return None
+    
+    @property
+    def production_gap_percentage(self):
+        """Calculate percentage increase needed"""
+        if self.actual_production_value and self.actual_production_value > 0:
+            gap = self.production_gap
+            if gap is not None:
+                return (gap / self.actual_production_value) * 100
+        return None
+    
+    @property
+    def has_production_increase(self):
+        """Check if expected production is higher than actual"""
+        if self.production_gap is not None:
+            return self.production_gap > 0
+        return False
+
+
+
+# End
