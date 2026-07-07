@@ -1246,117 +1246,22 @@ class InfrastructureAssessmentViewSet(viewsets.ModelViewSet):
 
 
 
-# ============= NATIONAL PRIORITY CROP VIEWSET =============
+
+
+
+
+class NationalPriorityCropListView(ListAPIView):
+    queryset = NationalPriorityCrop.objects.select_related('country', 'organism').all()
+    serializer_class = NationalPriorityCropListSerializer
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = NationalPriorityCropFilter
+
+
+
+
 
 class NationalPriorityCropViewSet(viewsets.ModelViewSet):
-    """
-    API endpoint for national priority crops that could benefit from GEd technology.
-    
-    Returns priority crops with filtering by country, organism, GEd potential,
-    and production metrics.
-    """
     queryset = NationalPriorityCrop.objects.select_related('country', 'organism').all()
-    permission_classes = [IsAuthenticatedOrReadOnly]
-    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
+    serializer_class = NationalPriorityCropListSerializer
+    filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = NationalPriorityCropAPIFilter
-    search_fields = [
-        'organism__common_name',
-        'organism__scientific_name',
-        'country__name',
-        'trait_improvement',
-        'socio_economic_importance',
-        'existing_rd'
-    ]
-    ordering_fields = [
-        'display_order',
-        'organism__common_name',
-        'country__name',
-        'ged_potential',
-        'actual_production_value',
-        'expected_production_value',
-        'production_year',
-        'created_at'
-    ]
-    ordering = ['display_order', 'organism__common_name']
-    
-    def get_serializer_class(self):
-        if self.action == 'list':
-            return NationalPriorityCropListSerializer
-        elif self.action == 'retrieve':
-            return NationalPriorityCropDetailSerializer
-        elif self.action in ['create', 'update', 'partial_update']:
-            return NationalPriorityCropCreateUpdateSerializer
-        return NationalPriorityCropListSerializer
-    
-    @action(detail=False, methods=['get'])
-    def stats(self, request):
-        """Get statistics about priority crops"""
-        queryset = self.filter_queryset(self.get_queryset())
-        
-        stats = {
-            'total_crops': queryset.count(),
-            'by_ged_potential': dict(
-                queryset.values_list('ged_potential')
-                .annotate(count=Count('id'))
-            ),
-            'by_country': dict(
-                queryset.values_list('country__name')
-                .annotate(count=Count('id'))
-            ),
-            'total_actual_production': float(
-                queryset.aggregate(total=Sum('actual_production_value'))['total'] or 0
-            ),
-            'total_expected_production': float(
-                queryset.aggregate(total=Sum('expected_production_value'))['total'] or 0
-            ),
-            'avg_actual_production': float(
-                queryset.aggregate(avg=Avg('actual_production_value'))['avg'] or 0
-            ),
-            'avg_expected_production': float(
-                queryset.aggregate(avg=Avg('expected_production_value'))['avg'] or 0
-            ),
-            'crops_with_increase': queryset.filter(
-                expected_production_value__gt=F('actual_production_value')
-            ).count(),
-            'high_potential_crops': queryset.filter(ged_potential='High').count(),
-            'active_crops': queryset.filter(is_active=True).count(),
-        }
-        return Response(stats)
-    
-    @action(detail=False, methods=['get'])
-    def high_potential(self, request):
-        """Get all high GEd potential crops"""
-        queryset = self.filter_queryset(self.get_queryset().filter(ged_potential='High'))
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
-    
-    @action(detail=False, methods=['get'])
-    def production_gap(self, request):
-        """Get crops with positive production gap (expected > actual)"""
-        queryset = self.filter_queryset(
-            self.get_queryset().filter(
-                expected_production_value__gt=F('actual_production_value')
-            )
-        )
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
-    
-    @action(detail=True, methods=['post'])
-    def toggle_active(self, request, pk=None):
-        """Toggle the active status of a crop"""
-        crop = self.get_object()
-        crop.is_active = not crop.is_active
-        crop.save()
-        return Response({
-            'id': crop.id,
-            'is_active': crop.is_active,
-            'status': 'active' if crop.is_active else 'inactive'
-        })

@@ -2,11 +2,8 @@
 
 from django_filters import rest_framework as filters
 from django.db import models
-from .models import (
-    Country, Project, Expert, Publication, Protocol, 
-    Event, Organism, Institution, LaboratoryFacility
-)
-
+from .models import *
+from django_filters import FilterSet, CharFilter, NumberFilter, ChoiceFilter, BooleanFilter
 
 class CountryFilter(filters.FilterSet):
     min_readiness = filters.NumberFilter(field_name='readiness_score', lookup_expr='gte')
@@ -218,3 +215,115 @@ class LaboratoryFacilityFilter(filters.FilterSet):
             models.Q(equipment_list__icontains=value) |
             models.Q(support_needed__icontains=value)
         )
+
+
+
+
+class NationalPriorityCropFilter(FilterSet):
+    """
+    Simplified filter set for NationalPriorityCrop
+    """
+    
+    # Country filters
+    country = NumberFilter(field_name='country__id')
+    country_name = CharFilter(field_name='country__name', lookup_expr='icontains')
+    
+    # Organism filters
+    organism = NumberFilter(field_name='organism__id')
+    organism_name = CharFilter(field_name='organism__common_name', lookup_expr='icontains')
+    
+    # GEd Potential filters
+    ged_potential = ChoiceFilter(
+        field_name='ged_potential',
+        choices=NationalPriorityCrop.GED_POTENTIAL_CHOICES
+    )
+    
+    # Production filters
+    min_actual = NumberFilter(field_name='actual_production_value', lookup_expr='gte')
+    max_actual = NumberFilter(field_name='actual_production_value', lookup_expr='lte')
+    min_expected = NumberFilter(field_name='expected_production_value', lookup_expr='gte')
+    max_expected = NumberFilter(field_name='expected_production_value', lookup_expr='lte')
+    
+    # Production gap filter
+    has_production_gap = BooleanFilter(method='filter_has_production_gap')
+    
+    # Production year
+    production_year = NumberFilter(field_name='production_year')
+    
+    # Status filters
+    is_active = BooleanFilter()
+    
+    # Search across multiple fields
+    search = CharFilter(method='filter_search')
+    
+    class Meta:
+        model = NationalPriorityCrop
+        fields = [
+            'country',
+            'country_name',
+            'organism',
+            'organism_name',
+            'ged_potential',
+            'is_active',
+            'production_year',
+            'min_actual',
+            'max_actual',
+            'min_expected',
+            'max_expected',
+            'has_production_gap',
+            'search'
+        ]
+    
+    def filter_has_production_gap(self, queryset, name, value):
+        """Filter crops with positive production gap (expected > actual)"""
+        if value is True:
+            return queryset.filter(
+                expected_production_value__gt=models.F('actual_production_value')
+            )
+        return queryset
+    
+    def filter_search(self, queryset, name, value):
+        """Search across multiple fields"""
+        if not value:
+            return queryset
+        
+        return queryset.filter(
+            models.Q(organism__common_name__icontains=value) |
+            models.Q(organism__scientific_name__icontains=value) |
+            models.Q(country__name__icontains=value) |
+            models.Q(trait_improvement__icontains=value) |
+            models.Q(socio_economic_importance__icontains=value) |
+            models.Q(existing_rd__icontains=value)
+        )
+
+
+class NationalPriorityCropAPIFilter(FilterSet):
+    """
+    Minimal filter set for API endpoints
+    """
+    
+    country = NumberFilter(field_name='country__id')
+    organism = NumberFilter(field_name='organism__id')
+    ged_potential = ChoiceFilter(choices=NationalPriorityCrop.GED_POTENTIAL_CHOICES)
+    is_active = BooleanFilter()
+    search = CharFilter(method='filter_search')
+    
+    class Meta:
+        model = NationalPriorityCrop
+        fields = [
+            'country',
+            'organism',
+            'ged_potential',
+            'is_active',
+            'search'
+        ]
+    
+    def filter_search(self, queryset, name, value):
+        if not value:
+            return queryset
+        return queryset.filter(
+            models.Q(organism__common_name__icontains=value) |
+            models.Q(organism__scientific_name__icontains=value) |
+            models.Q(country__name__icontains=value) |
+            models.Q(trait_improvement__icontains=value)
+              )

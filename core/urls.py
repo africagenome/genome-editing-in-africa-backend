@@ -44,6 +44,10 @@ router.register(r'infrastructure-projects', views.InfrastructureProjectViewSet, 
 router.register(r'training-capacities', views.TrainingCapacityViewSet, basename='training-capacities')
 router.register(r'infrastructure-assessments', views.InfrastructureAssessmentViewSet, basename='infrastructure-assessments')
 
+# ============= NATIONAL PRIORITY CROPS =============
+router.register(r'priority-crops', views.NationalPriorityCropViewSet, basename='priority-crops')
+
+
 urlpatterns = [
     path('', include(router.urls)),
 ]

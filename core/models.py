@@ -5,6 +5,7 @@ from django.utils.text import slugify
 from multiselectfield import MultiSelectField
 
 
+
 class OrganismCategory(models.Model):
     """
     Categories for organisms: Plant, Animal, Micro-organism, etc.
@@ -1483,7 +1484,7 @@ class NationalPriorityCrop(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        ordering = ['display_order', 'category', 'organism__common_name']
+        ordering = ['display_order', 'organism__common_name']
         verbose_name = 'National Priority Crop for GEd'
         verbose_name_plural = 'National Priority Crops for GEd'
         unique_together = ['country', 'organism']

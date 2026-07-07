@@ -4,8 +4,9 @@ from django.contrib import admin
 from django.utils.html import format_html
 from import_export.admin import ExportActionMixin
 from .models import *
-#from multi_select_field import MultiSelectFormField 
 from multiselectfield import MultiSelectField
+from django.urls import reverse
+from django.contrib import messages
 
 
 @admin.register(Region)
@@ -625,13 +626,13 @@ class NationalPriorityCropAdmin(admin.ModelAdmin):
         if obj.production_gap is not None:
             if obj.production_gap > 0:
                 return format_html(
-                    '<span style="color: #28a745; font-weight: bold;">+{:,} t</span>',
-                    obj.production_gap
+                    '<span style="color: #28a745; font-weight: bold;">+{} t</span>',
+                    f"{obj.production_gap:,.0f}"
                 )
             elif obj.production_gap < 0:
                 return format_html(
-                    '<span style="color: #dc3545;">{:,} t</span>',
-                    obj.production_gap
+                    '<span style="color: #dc3545;">{} t</span>',
+                    f"{obj.production_gap:,.0f}"
                 )
             else:
                 return format_html(
@@ -640,6 +641,9 @@ class NationalPriorityCropAdmin(admin.ModelAdmin):
         return format_html('<span style="color: #6c757d;">N/A</span>')
     production_gap_display.short_description = 'Production Gap'
     
+
+
+
     # Custom actions
     def make_active(self, request, queryset):
         """Set selected crops as active"""

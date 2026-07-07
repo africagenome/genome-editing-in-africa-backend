@@ -705,3 +705,189 @@ class InfrastructureAssessmentSerializer(serializers.ModelSerializer):
             'description', 'current_status', 'challenges', 'recommendations',
             'priority', 'priority_display', 'score', 'created_at', 'updated_at'
         ]
+
+class NationalPriorityCropListSerializer(serializers.ModelSerializer):
+    """Serializer for listing priority crops"""
+    
+    country_name = serializers.CharField(source='country.name', read_only=True)
+    country_code = serializers.CharField(source='country.code', read_only=True)
+    organism_name = serializers.CharField(source='organism.common_name', read_only=True)
+    organism_scientific = serializers.CharField(source='organism.scientific_name', read_only=True)
+    ged_potential_display = serializers.CharField(source='get_ged_potential_display', read_only=True)
+    ged_potential_icon = serializers.CharField(read_only=True)
+    ged_potential_badge_class = serializers.CharField(read_only=True)
+    production_gap = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    production_gap_percentage = serializers.FloatField(read_only=True)
+    has_production_increase = serializers.BooleanField(read_only=True)
+    
+    class Meta:
+        model = NationalPriorityCrop
+        fields = [
+            'id',
+            'country',
+            'country_name',
+            'country_code',
+            'organism',
+            'organism_name',
+            'organism_scientific',
+            'trait_improvement',
+            'socio_economic_importance',
+            'ged_potential',
+            'ged_potential_display',
+            'ged_potential_icon',
+            'ged_potential_badge_class',
+            'existing_rd',
+            'existing_rd_details',
+            'actual_annual_production',
+            'actual_production_value',
+            'actual_production_citation',
+            'expected_annual_production',
+            'expected_production_value',
+            'production_year',
+            'production_gap',
+            'production_gap_percentage',
+            'has_production_increase',
+            'display_order',
+            'data_source',
+            'is_active',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = [
+            'id',
+            'created_at',
+            'updated_at',
+            'production_gap',
+            'production_gap_percentage',
+            'has_production_increase'
+        ]
+
+
+class NationalPriorityCropDetailSerializer(serializers.ModelSerializer):
+    """Serializer for detailed view of priority crops"""
+    
+    country = CountryListSerializer(read_only=True)
+    organism = OrganismListSerializer(read_only=True)
+    ged_potential_display = serializers.CharField(source='get_ged_potential_display', read_only=True)
+    ged_potential_icon = serializers.CharField(read_only=True)
+    ged_potential_badge_class = serializers.CharField(read_only=True)
+    production_gap = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    production_gap_percentage = serializers.FloatField(read_only=True)
+    has_production_increase = serializers.BooleanField(read_only=True)
+    
+    class Meta:
+        model = NationalPriorityCrop
+        fields = [
+            'id',
+            'country',
+            'organism',
+            'trait_improvement',
+            'socio_economic_importance',
+            'ged_potential',
+            'ged_potential_display',
+            'ged_potential_icon',
+            'ged_potential_badge_class',
+            'existing_rd',
+            'existing_rd_details',
+            'actual_annual_production',
+            'actual_production_value',
+            'actual_production_citation',
+            'expected_annual_production',
+            'expected_production_value',
+            'production_year',
+            'production_gap',
+            'production_gap_percentage',
+            'has_production_increase',
+            'display_order',
+            'data_source',
+            'is_active',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = [
+            'id',
+            'created_at',
+            'updated_at',
+            'production_gap',
+            'production_gap_percentage',
+            'has_production_increase'
+        ]
+
+
+class NationalPriorityCropCreateUpdateSerializer(serializers.ModelSerializer):
+    """Serializer for creating and updating priority crops"""
+    
+    class Meta:
+        model = NationalPriorityCrop
+        fields = [
+            'id',
+            'country',
+            'organism',
+            'trait_improvement',
+            'socio_economic_importance',
+            'ged_potential',
+            'existing_rd',
+            'existing_rd_details',
+            'actual_annual_production',
+            'actual_production_value',
+            'actual_production_citation',
+            'expected_annual_production',
+            'expected_production_value',
+            'production_year',
+            'display_order',
+            'data_source',
+            'is_active'
+        ]
+        read_only_fields = ['id']
+    
+    def validate(self, data):
+        """Custom validation"""
+        # Ensure production values are positive
+        if data.get('actual_production_value') is not None and data['actual_production_value'] < 0:
+            raise serializers.ValidationError({
+                'actual_production_value': 'Production value cannot be negative.'
+            })
+        
+        if data.get('expected_production_value') is not None and data['expected_production_value'] < 0:
+            raise serializers.ValidationError({
+                'expected_production_value': 'Production value cannot be negative.'
+            })
+        
+        return data
+
+
+class NationalPriorityCropSummarySerializer(serializers.ModelSerializer):
+    """Serializer for summary statistics"""
+    
+    country_name = serializers.CharField(source='country.name', read_only=True)
+    organism_name = serializers.CharField(source='organism.common_name', read_only=True)
+    ged_potential_display = serializers.CharField(source='get_ged_potential_display', read_only=True)
+    production_gap = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    
+    class Meta:
+        model = NationalPriorityCrop
+        fields = [
+            'id',
+            'country_name',
+            'organism_name',
+            'ged_potential_display',
+            'actual_production_value',
+            'expected_production_value',
+            'production_gap'
+        ]
+
+
+class NationalPriorityCropStatsSerializer(serializers.Serializer):
+    """Serializer for statistics/aggregations"""
+    
+    total_crops = serializers.IntegerField()
+    by_country = serializers.DictField(child=serializers.IntegerField())
+    by_ged_potential = serializers.DictField(child=serializers.IntegerField())
+    total_actual_production = serializers.DecimalField(max_digits=20, decimal_places=2)
+    total_expected_production = serializers.DecimalField(max_digits=20, decimal_places=2)
+    total_production_gap = serializers.DecimalField(max_digits=20, decimal_places=2)
+    crops_with_increase = serializers.IntegerField()
+    high_potential_crops = serializers.IntegerField()
+
+
+
